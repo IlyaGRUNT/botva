@@ -146,6 +146,22 @@ namespace AES {
         state[rowNum] = row;
     }
 
+    void cycleShiftRight(unsigned short rowNum) {
+        array<bitset<8>, 4> row{ state[rowNum] };
+        rotate(row.begin(), row.begin() - rowNum, row.end());
+        state[rowNum] = row;
+    };
+
+    string hexToString(string hex) {
+        string str{};
+        unsigned char ch{};
+        for (unsigned short i = 0; i < hex.length() / 2 - 1; i++) {
+            ch = static_cast<unsigned char>(hexToBin(str.substr(i * 2, 2)).to_ulong());
+            str.push_back(ch);
+        }
+        return str;
+    };
+
     void subBytes() {
         bitset<8> byte{};
         for (unsigned short row = 0; row < 3; row++) {
@@ -159,6 +175,20 @@ namespace AES {
             }
         }
     }
+
+    void invSubBytes() {
+        bitset<8> byte{};
+        for (unsigned short row = 0; row < 3; row++) {
+            for (unsigned short column = 0; column < 3; column++) {
+                byte = state[row][column];
+                const unsigned int x = byte.test(7) * 8 + byte.test(6) * 4 + byte.test(5) * 2 + byte.test(4);
+                const unsigned int y = byte.test(3) * 8 + byte.test(2) * 4 + byte.test(1) * 2 + byte.test(0);
+                const string newHexByte{ invSBox[x][y] };
+                const bitset<8> newBinByte{ hexToBin(newHexByte) };
+                state[row][column] = newBinByte;
+            }
+        }
+    };
 
     unsigned short getNumOfBlocks(string text) {
         const double textLen = static_cast<double>(text.length());
@@ -185,6 +215,11 @@ namespace AES {
         for (unsigned short i = 0; i < 3; i++)
             cycleShiftLeft(i);
     }
+
+    void invShiftRows() {
+        for (unsigned short i = 0; i < 3; i++)
+            cycleShiftRight(i);
+    };
 
     bitset<8> mixColumnsMultiply(array<bitset<8>, 4> byte, unsigned short index) {
         const array<string, 4> cBytes{ c[index] };
@@ -288,17 +323,45 @@ namespace AES {
         unsigned short numOfBlocks{ getNumOfBlocks(text) };
         for (unsigned short block = 0; block < numOfBlocks; block++) {
             getState(text, block);
-            for (unsigned short round = 0; round < 14; round++) {
+            for (unsigned short round = 0; round < 13; round++) {
                 subBytes();
                 shiftRows();
                 mixColumns();
                 addRoundKey(round);
             }
+            subBytes();
+            shiftRows();
+            addRoundKey(14);
             if (block == numOfBlocks - 1)
                 encryptedString += deleteSpaces(stateToStr());
             else
                 encryptedString += stateToStr();
         }
         return stringToHex(encryptedString);
+    }
+
+    string decrypr(string key, string text) {
+        text = hexToString(text);
+        string decryptedString{};
+        expandKey(key);
+        unsigned short numOfBlocks{ getNumOfBlocks(text) };
+        for (unsigned short block = 0; block < numOfBlocks; block++) {
+            getState(text, block);
+            addRoundKey(14);
+            invShiftRows();
+            invSubBytes();
+            for (unsigned short round = 13; round > 0; round--) {
+                addRoundKey(round);
+                invMixColumns();
+                invShiftRows();
+                invSubBytes();
+            }
+
+            if (block == numOfBlocks - 1)
+                decryptedString += deleteSpaces(stateToStr());
+            else
+                decryptedString += stateToStr();
+        }
+        return stringToHex(decryptedString);
     }
 };

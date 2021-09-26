@@ -11,11 +11,14 @@ namespace AES {
 	bitset<8> hexToBin(string hexByte);
 	array<bitset<8>, 4>& xorBytes(array<bitset<8>, 4> bytes1, array<bitset<8>, 4> bytes2);
 	void cycleShiftLeft(unsigned short rowNum);
+	void cycleShiftRight(unsigned short rowNum);
+	string hexToString(string hex);
 	void subBytes();
 	unsigned short getNumOfBlocks(string text);
 	string getStrState(string text, unsigned int index);
 	void getState(string text, unsigned int index);
 	void shiftRows();
+	void invShiftRows();
 	bitset<8> mixColumnsMultiply(array<bitset<8>, 4> byte, unsigned short index);
 	void mixColumns();
 	void initKey(string key);
@@ -25,4 +28,5 @@ namespace AES {
 	string stateToStr();
 	string deleteSpaces(string block);
 	string encrypt(string key, string text);
+	string decrypt(string key, string text);
 }
