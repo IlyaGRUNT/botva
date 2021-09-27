@@ -4,14 +4,12 @@
 #include <array>
 #include <sstream>
 #include <string>
+#include <fstream>
 #include "AES.h"
 
 using namespace std;
 
 namespace AES {
-    typedef uint8_t gal8;
-    const gal8 min_poly = 0b11101,
-        generator = 0b10;
     const array<array<string, 16>, 16> SBox{
         array<string, 16> {"63", "7c", "77", "7b", "f2", "6b", "6f", "c5", "30", "01", "67", "2b", "fe", "d7", "ab", "76"},
         array<string, 16> {"ca", "82", "c9", "7d", "fa", "59", "47", "f0", "ad", "d4", "a2", "af", "9c", "a4", "72", "c0"},
@@ -60,42 +58,42 @@ namespace AES {
         array<string, 4> {"0d", "09", "0e", "0b"},
         array<string, 4> {"0b", "0d", "09", "0e"}
     };
-    const array<array<string, 4>, 15> RCon{
-        array<string, 4>{"00", "00", "00", "00"},
-        array<string, 4>{"01", "00", "00", "00"},
-        array<string, 4>{"02", "00", "00", "00"},
-        array<string, 4>{"04", "00", "00", "00"},
-        array<string, 4>{"08", "00", "00", "00"},
-        array<string, 4>{"10", "00", "00", "00"},
-        array<string, 4>{"20", "00", "00", "00"},
-        array<string, 4>{"40", "00", "00", "00"},
-        array<string, 4>{"80", "00", "00", "00"},
-        array<string, 4>{"1b", "00", "00", "00"},
-        array<string, 4>{"36", "00", "00", "00"},
-        array<string, 4>{"77", "00", "00", "00"},
-        array<string, 4>{"f5", "00", "00", "00"},
-        array<string, 4>{"11", "00", "00", "00"},
-        array<string, 4>{"39", "00", "00", "00"}
+    const array<bitset<8>, 16> RCon{
+        bitset<8>(0b0000'0001),
+        bitset<8>(0b0000'0001),
+        bitset<8>(0b0000'0001),
+        bitset<8>(0b0000'0001),
+        bitset<8>(0b0000'0010),
+        bitset<8>(0b0000'0010),
+        bitset<8>(0b0000'0100),
+        bitset<8>(0b0000'0100),
+        bitset<8>(0b0000'1000),
+        bitset<8>(0b0000'1000),
+        bitset<8>(0b0001'0000),
+        bitset<8>(0b0001'0000),
+        bitset<8>(0b0010'0000),
+        bitset<8>(0b0010'0000),
+        bitset<8>(0b0100'0000)
     };
 
-    array<array<array<bitset<8>, 4>, 4>, 15> keySchedule{};
+    array<array<array<bitset<8>, 4>, 4>, 16> keySchedule{};
     array<array<bitset<8>, 4>, 4> state{};
 
-    bitset<8> galMul(bitset<8> a1, bitset<8> b1) { // частично украдена
-        unsigned char a{ static_cast<unsigned char>(a1.to_ulong()) };
-        unsigned char b{ static_cast<unsigned char>(b1.to_ulong()) };
-        gal8 res{ 0 };
-        string strBin{};
-        for (; b; b >>= 1) {
+    bitset<8> galMul(bitset<8> a1, bitset<8> b1) { // частично украдено
+        uint8_t a{ static_cast<uint8_t>(a1.to_ulong()) };
+        uint8_t b{ static_cast<uint8_t>(b1.to_ulong()) };
+        uint8_t p{};
+        while (a && b) {
             if (b & 1)
-                res ^= a;
+                p ^= a;
+
             if (a & 0x80)
-                a = (a << 1) ^ min_poly;
+                a = (a << 1) ^ 0x11b;
             else
                 a <<= 1;
+            b >>= 1;
         }
-        int i = 8; 
-        return bitset<8>(res);
+        return bitset<8>(p);
     }
 
     bitset<4> hexCharToBin(char c) {
@@ -121,12 +119,31 @@ namespace AES {
         return bitset<4>{0b0000};
     }
 
+    bitset<8> concat(bitset<4> a, bitset<4> b) {
+        const string strA{ a.to_string() };
+        const string strB{ b.to_string() };
+        return bitset<8>{ strA + strB };
+    }
+
+    bitset<8> hexToBin(string hexByte) {
+        const bitset<4> hexByte1{ hexCharToBin(hexByte[0]) };
+        const bitset<4> hexByte2{ hexCharToBin(hexByte[1]) };
+        const bitset<8> binByte{ concat(hexByte1, hexByte2) };
+        return binByte;
+    }
+
+    string binToHex(bitset<8> bin) {
+        stringstream res;
+        res << hex << uppercase << bin.to_ulong();
+        return res.str();
+    }
+
     string stringToHex(string str) {
         bitset<8> bin{};
         bitset<4> bin1{};
         bitset<4> bin2{};
         string newStr{};
-        for (unsigned short i = 0; i < str.length() - 1; i++) {
+        for (unsigned short i = 0; i < str.length(); i++) {
             bin = bitset<8>(str[i]);
             bin1 = bitset<4>(bin.to_string().substr(0, 4));
             bin2 = bitset<4>(bin.to_string().substr(4, 4));
@@ -146,55 +163,29 @@ namespace AES {
         return newStr;
     }
 
-    bitset<8> concat(bitset<4> a, bitset<4> b) {
-        const string strA{ a.to_string() };
-        const string strB{ b.to_string() };
-        return bitset<8>{ strA + strB };
-    }
-
-    bitset<8> hexToBin(string hexByte) {
-        const bitset<4> hexByte1{ hexCharToBin(hexByte[0]) };
-        const bitset<4> hexByte2{ hexCharToBin(hexByte[1]) };
-        const bitset<8> binByte{ concat(hexByte1, hexByte2) };
-        return binByte;
-    }
-
     array<bitset<8>, 4> xorBytes(array<bitset<8>, 4> bytes1, array<bitset<8>, 4> bytes2) {
         array<bitset<8>, 4> newBytes{};
-        for (unsigned short i = 0; i < 3; i++)
+        for (uint8_t i = 0; i < 4; i++)
             newBytes[i] = bytes1[i] ^ bytes2[i];
         return newBytes;
     }
 
-    void cycleShiftLeft(unsigned short rowNum) {
+    void cycleShiftLeft(uint8_t rowNum) {
         array<bitset<8>, 4> row{ state[rowNum] };
         rotate(row.begin(), row.begin() + rowNum, row.end());
         state[rowNum] = row;
     }
 
-    void cycleShiftRight(unsigned short rowNum) {
+    void cycleShiftRight(uint8_t rowNum) {
         array<bitset<8>, 4> row{ state[rowNum] };
         rotate(row.begin(), row.begin() + (4 - rowNum) , row.end());
         state[rowNum] = row;
     };
 
-    string hexToString(string hex) {
-        string str{};
-        string subs{};
-        unsigned char ch{};
-        for (unsigned short i = 0; i < hex.length() / 2 - 1; i++) {
-            subs = hex.substr(static_cast<_int64>(i) * 2, 2);
-            ch = static_cast<unsigned char>(hexToBin(subs).to_ulong());
-            //ch = static_cast<unsigned char>(hexToBin(str.substr(static_cast<_int64>(i) * 2, 2)).to_ulong());
-            str.push_back(ch);
-        }
-        return str;
-    };
-
     void subBytes() {
         bitset<8> byte{};
-        for (unsigned short row = 0; row < 3; row++) {
-            for (unsigned short column = 0; column < 3; column++) {
+        for (uint8_t row = 0; row < 4; row++) {
+            for (uint8_t column = 0; column < 4; column++) {
                 byte = state[row][column];
                 const unsigned int x = byte.test(7) * 8 + byte.test(6) * 4 + byte.test(5) * 2 + byte.test(4);
                 const unsigned int y = byte.test(3) * 8 + byte.test(2) * 4 + byte.test(1) * 2 + byte.test(0);
@@ -207,8 +198,8 @@ namespace AES {
 
     void invSubBytes() {
         bitset<8> byte{};
-        for (unsigned short row = 0; row < 3; row++) {
-            for (unsigned short column = 0; column < 3; column++) {
+        for (uint8_t row = 0; row < 4; row++) {
+            for (uint8_t column = 0; column < 4; column++) {
                 byte = state[row][column];
                 const unsigned int x = byte.test(7) * 8 + byte.test(6) * 4 + byte.test(5) * 2 + byte.test(4);
                 const unsigned int y = byte.test(3) * 8 + byte.test(2) * 4 + byte.test(1) * 2 + byte.test(0);
@@ -219,55 +210,53 @@ namespace AES {
         }
     };
 
-    unsigned short getNumOfBlocks(string text) {
+    uint8_t getNumOfBlocks(string text) {
         const double textLen = static_cast<double>(text.length());
         const unsigned int numberOfBlocks{ static_cast<unsigned int>(ceil(textLen / 16.0)) };
         return numberOfBlocks;
     }
 
     string getStrState(string text, unsigned int index) {
-        string block = text.substr(static_cast<_int64>(index) * 16, static_cast<_int64>(index) * 16 + 16);
+        string block = text.substr(static_cast<_int64>(index) * 16, 16);
         unsigned _int64 len{ block.length() };
         if (block.length() < 16)
-            for (unsigned short i = 0; i < (15 - len); i++)
+            for (uint8_t i = 0; i < (16 - len); i++)
                 block.push_back(' ');
         return block;
     }
 
     void getState(string text, unsigned int index) {
-        string block{ getStrState(text, index) };
-        for (unsigned short i = 0; i < 15; i++)
-            state[i % 4][static_cast<unsigned short>(floor(i / 4))] = bitset<8>(block[i]);
+        string strState = getStrState(text, index);
+        for (_int64 row = 0; row < 4; row++)
+            for (_int64 column = 0; column < 4; column++) {
+                state[row][column] = bitset<8>(strState[row * 4 + column]);
+            }
     }
 
     void shiftRows() {
-        for (unsigned short i = 0; i < 3; i++)
+        for (uint8_t i = 0; i < 4; i++)
             cycleShiftLeft(i);
     }
 
     void invShiftRows() {
-        for (unsigned short i = 1; i < 3; i++)
+        for (uint8_t i = 1; i < 4; i++)
             cycleShiftRight(i);
     };
 
-    bitset<8> GFMultiplyBy2(bitset<8> byte) {
-        return (byte << 1) ^ bitset<8>(0b0001'1011);
-    }
-
-    bitset<8> mixColumnsMultiply(array<bitset<8>, 4> byte, unsigned short index) {
+    bitset<8> mixColumnsMultiply(array<bitset<8>, 4> byte, uint8_t index) {
         const array<string, 4> cBytes{ c[index] };
         array<bitset<8>, 4> intermidateRes{};
-        for (unsigned short i = 0; i < 3; i++) {
+        for (uint8_t i = 0; i < 4; i++) {
             intermidateRes[i] = galMul(hexToBin(cBytes[i]), byte[i]);
         }
         const bitset<8> newByte{ intermidateRes[0] ^ intermidateRes[1] ^ intermidateRes[2] ^ intermidateRes[3] };
         return newByte;
     }
 
-    bitset<8> invMixColumnsMultiply(array<bitset<8>, 4> byte, unsigned short index) {
+    bitset<8> invMixColumnsMultiply(array<bitset<8>, 4> byte, uint8_t index) {
         const array<string, 4> cBytes{ invC[index] };
         array<bitset<8>, 4> intermidateRes{};
-        for (unsigned short i = 0; i < 3; i++) {
+        for (uint8_t i = 0; i < 4; i++) {
             intermidateRes[i] = galMul(hexToBin(cBytes[i]), byte[i]);
         }
         const bitset<8> newByte{ intermidateRes[0] ^ intermidateRes[1] ^ intermidateRes[2] ^ intermidateRes[3] };
@@ -276,32 +265,32 @@ namespace AES {
 
     void mixColumns() {
         array<bitset<8>, 4> oldColumn{};
-        for (unsigned short column = 0; column < 3; column++) {
-            for (unsigned short row = 0; row < 3; row++)
+        for (uint8_t column = 0; column < 4; column++) {
+            for (uint8_t row = 0; row < 4; row++)
                 oldColumn[row] = state[row][column];
-            for (unsigned short row = 0; row < 3; row++)
+            for (uint8_t row = 0; row < 4; row++)
                 state[row][column] = mixColumnsMultiply(oldColumn, row);
         }
     }
 
     void invMixColumns() {
         array<bitset<8>, 4> oldColumn{};
-        for (unsigned short column = 0; column < 3; column++) {
-            for (unsigned short row = 0; row < 3; row++)
+        for (uint8_t column = 0; column < 4; column++) {
+            for (uint8_t row = 0; row < 4; row++)
                 oldColumn[row] = state[row][column];
-            for (unsigned short row = 0; row < 3; row++)
+            for (uint8_t row = 0; row < 4; row++)
                 state[row][column] = invMixColumnsMultiply(oldColumn, row);
         }
 
     }
 
     void initKey(string key) {
-        keySchedule = array<array<array<bitset<8>, 4>, 4>, 15>{};
+        keySchedule = array<array<array<bitset<8>, 4>, 4>, 16>{};
         string hexByte{};
         bitset<8> bin{};
-        for (unsigned short i = 0; i < 2; i++) {
-            for (unsigned short i1 = i * 4; i1 < i * 4 + 3; i1++) {
-                for (unsigned short i2 = i1 * 4; i2 < i * 4 + 3; i2++) {
+        for (uint8_t i = 0; i < 2; i++) {
+            for (uint8_t i1 = i * 4; i1 < i * 4 + 3; i1++) {
+                for (uint8_t i2 = i1 * 4; i2 < i * 4 + 3; i2++) {
                     hexByte = key.substr(static_cast<_int64>(i2) * 2, 2);
                     bin = hexToBin(hexByte);
                     keySchedule[i][i1][i2 % 4] = bin;
@@ -310,28 +299,25 @@ namespace AES {
         }
     }
 
-    array<bitset<8>, 4> g(array<bitset<8>, 4> word, unsigned short round) {
+    array<bitset<8>, 4> g(array<bitset<8>, 4> word, uint8_t round) {
         unsigned int x{};
         unsigned int y{};
         bitset<8> byte;
-        array<bitset<8>, 4> RConArr{};
-        for (unsigned short RC = 0; RC < 3; RC++)
-            RConArr[RC] = hexToBin(RCon[static_cast<_int64>(round) + 1][RC]);
         rotate(word.begin(), word.begin() + 1, word.end());
-        for (unsigned short byteIndex = 0; byteIndex < 3; byteIndex++) {
+        for (uint8_t byteIndex = 0; byteIndex < 4; byteIndex++) {
             byte = word[byteIndex];
             x = byte.test(7) * 8 + byte.test(6) * 4 + byte.test(5) * 2 + byte.test(4);
             y = byte.test(3) * 8 + byte.test(2) * 4 + byte.test(1) * 2 + byte.test(0);
             word[byteIndex] = hexToBin(SBox[x][y]);
         }
-        word = xorBytes(word, RConArr);
+        word[0] ^= RCon[round];
         return word;
     }
 
     void expandKey(string key) {
         initKey(key);
-        for (unsigned short round = 2; round < 14; round++) {
-            for (unsigned short row = 0; row < 3; row++) {
+        for (uint8_t round = 2; round < 15; round++) {
+            for (uint8_t row = 0; row < 4; row++) {
                 if (row == 0)
                     keySchedule[round][row] = xorBytes(keySchedule[round - 1][row], g(keySchedule[round - 1][3], round));
                 else
@@ -340,39 +326,29 @@ namespace AES {
         }
     }
 
-    void addRoundKey(unsigned short round) {
-        for (unsigned short row = 0; row < 3; row++)
+    void addRoundKey(uint8_t round) {
+        for (uint8_t row = 0; row < 4; row++)
             state[row] = xorBytes(state[row], keySchedule[round][row]);
     }
 
     string stateToStr() {
         unsigned char stateChar{};
         string encryptedString{};
-        for (unsigned short row = 0; row < 4; row++)
-            for (unsigned short column = 0; column < 4; column++) {
+        for (uint8_t row = 0; row < 4; row++)
+            for (uint8_t column = 0; column < 4; column++) {
                 stateChar = static_cast<unsigned char>(state[row][column].to_ullong());
                 encryptedString.push_back(stateChar);
             }
         return encryptedString;
     }
 
-    string deleteSpaces(string block) {
-        for (unsigned short i = 15; i > 0; i--) {
-            if (block[i] == ' ')
-                block.erase(i, 1);
-            else
-                break;
-        }
-        return block;
-    }
-
     string encrypt(string key, string text) {
         string encryptedString{};
         expandKey(key);
-        unsigned short numOfBlocks{ getNumOfBlocks(text) };
-        for (unsigned short block = 0; block < numOfBlocks; block++) {
+        uint8_t numOfBlocks{ getNumOfBlocks(text) };
+        for (uint8_t block = 0; block < numOfBlocks; block++) {
             getState(text, block);
-            for (unsigned short round = 0; round < 13; round++) {
+            for (uint8_t round = 0; round < 14; round++) {
                 subBytes();
                 shiftRows();
                 mixColumns();
@@ -381,37 +357,28 @@ namespace AES {
             subBytes();
             shiftRows();
             addRoundKey(14);
-            if (block == numOfBlocks - 1)
-                encryptedString += deleteSpaces(stateToStr());
-            else
-                encryptedString += stateToStr();
+            encryptedString += stateToStr();
         }
-        return stringToHex(encryptedString);
+        return encryptedString;
     }
 
     string decrypt(string key, string text) {
-        text = hexToString(text);
         string decryptedString{};
-        array<array<bitset<8>, 4>, 4> state_d{};
         expandKey(key);
-        unsigned short numOfBlocks{ getNumOfBlocks(text) };
-        for (unsigned short block = 0; block < numOfBlocks; block++) {
-            getState(text, block);
+        uint8_t numOfBlocks{ getNumOfBlocks(text) };
+        for (uint8_t block = numOfBlocks; block > 0; block--) {
+            getState(text, block - 1);
             addRoundKey(14);
             invShiftRows();
             invSubBytes();
-            for (unsigned short round = 13; round > 0; round--) {
-                state_d = state;
-                addRoundKey(round);
+       
+        for (uint8_t round = 14; round > 0; round--) {
+                addRoundKey(round - 1);
                 invMixColumns();
                 invShiftRows();
                 invSubBytes();
             }
-
-            if (block == numOfBlocks - 1)
-                decryptedString += deleteSpaces(stateToStr());
-            else
-                decryptedString += stateToStr();
+        decryptedString = stateToStr() + decryptedString;
         }
         return decryptedString;
     }
