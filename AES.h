@@ -1,15 +1,15 @@
 #pragma once
-#pragma once
 #include <string>
 #include <array>
 using namespace std;
 
 namespace AES {
+	bitset<8> galMul(bitset<8> a1, bitset<8> b1);
 	bitset<4> hexCharToBin(char c);
 	string stringToHex(string str);
 	bitset<8> concat(bitset<4> a, bitset<4> b);
 	bitset<8> hexToBin(string hexByte);
-	array<bitset<8>, 4>& xorBytes(array<bitset<8>, 4> bytes1, array<bitset<8>, 4> bytes2);
+	array<bitset<8>, 4> xorBytes(array<bitset<8>, 4> bytes1, array<bitset<8>, 4> bytes2);
 	void cycleShiftLeft(unsigned short rowNum);
 	void cycleShiftRight(unsigned short rowNum);
 	string hexToString(string hex);
@@ -19,10 +19,13 @@ namespace AES {
 	void getState(string text, unsigned int index);
 	void shiftRows();
 	void invShiftRows();
+	bitset<8> GFMultiplyBy2(bitset<8> byte);
 	bitset<8> mixColumnsMultiply(array<bitset<8>, 4> byte, unsigned short index);
+	bitset<8> invMixColumnsMultiply(array<bitset<8>, 4> byte, unsigned short index);
 	void mixColumns();
+	void invMixColumns();
 	void initKey(string key);
-	array<bitset<8>, 4>& g(array<bitset<8>, 4> word, unsigned short round);
+	array<bitset<8>, 4> g(array<bitset<8>, 4> word, unsigned short round);
 	void expandKey(string key);
 	void addRoundKey(unsigned short round);
 	string stateToStr();
