@@ -7,8 +7,6 @@
 using namespace std;
 
 namespace DH {
-	constexpr array<uint8_t, 25> primeSet{ 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97 };
-
 	unsigned short fi(double num) {
 		double result{ num };
 		unsigned short i{ 2 };
@@ -34,39 +32,59 @@ namespace DH {
 		return a;
 	}
 
-	vector<uint8_t> getRequiredSet(uint8_t modulo) {
-		vector<uint8_t> result{};
-		for (uint8_t num = 1; num < modulo; num++)
+	vector<unsigned short> getRequiredSet(unsigned short modulo) {
+		vector<unsigned short> result{};
+		for (unsigned short num = 1; num < modulo; num++)
 			if (gcd(num, modulo) == 1)
 				result.insert(result.end(), num);
 		return result;
 	}
 
-	vector<uint8_t> getActualSet(uint8_t g, uint8_t modulo) {
-		vector<uint8_t> result{};
+	vector<unsigned short> getActualSet(uint8_t g, unsigned short modulo) {
+		vector<unsigned short> result{};
 		for (uint8_t power = 1; power < modulo; power++)
-			result.insert(result.end(), static_cast<unsigned int>(pow(g, power)) % modulo);
+			result.insert(result.end(), powMod(g, power, modulo));
 		return result;
 	}
 
+	unsigned short powMod(unsigned short a, unsigned short b, unsigned short p) {
+		int res = 1;
+		while (b)
+			if (b & 1)
+				res = int(res * 1ll * a % p), --b;
+			else
+				a = int(a * 1ll * a % p), b >>= 1;
+		return res;
+	}
+
 	uint8_t primeRoot(uint8_t modulo) {
-		vector<uint8_t> requiredSet{ getRequiredSet(modulo) };
-		vector<uint8_t> actualSet{};
-		for (uint8_t g = 0; g < modulo; g++) {
-			actualSet = getActualSet(g, modulo);
-			if (actualSet == requiredSet)
-				return g;
+		vector<int> fact;
+		int phi = modulo - 1, n = phi;
+		for (int i = 2; i * i <= n; ++i)
+			if (n % i == 0) {
+				fact.push_back(i);
+				while (n % i == 0)
+					n /= i;
+			}
+		if (n > 1)
+			fact.push_back(n);
+
+		for (int res = 2; res <= modulo; ++res) {
+			bool ok = true;
+			for (size_t i = 0; i < fact.size() && ok; ++i)
+				ok &= powMod(res, phi / fact[i], modulo) != 1;
+			if (ok)  return res;
 		}
 	}
 
-	unsigned short getPublicKey1(uint8_t p, uint8_t privateKey) {
-		uint8_t g{ primeRoot(p) };
-		unsigned short publicKey1{ static_cast<unsigned short>(pow(g, privateKey)) % p };
+	unsigned short getPublicKey1(unsigned short p, unsigned short privateKey) {
+		const uint8_t g{ primeRoot(p) };
+		unsigned short publicKey1{ powMod(primeRoot(p), privateKey, p)};
 		return publicKey1;
 	}
 
-	unsigned short getMasterKey(uint8_t p, uint8_t privateKey, unsigned short publicKey2) {
-		unsigned short masterKey{ static_cast<unsigned short>(pow(publicKey2, privateKey)) % p };
+	unsigned short getMasterKey(unsigned short p, unsigned short privateKey, unsigned short publicKey2) {
+		const unsigned short masterKey{ powMod(publicKey2, privateKey, p) };
 		return masterKey;
 	}
 }
