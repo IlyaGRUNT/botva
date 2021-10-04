@@ -13,24 +13,20 @@ using namespace AES;
 using namespace DH;
 
 int main()
-{/*
-    string key;  //12yjslna4cn1ova9aqk7piqc60mk80cb
-    cout << "Enter key, 32 symbols: ";
-    cin >> key;
-    key = stringToHex(key);
+{
+    srand(time(0));
+    const array<unsigned short, 64> pArr{ getPArr() };
+    const array<unsigned long long, 64> privateKeyArr1{ getPrivateKeyArr() };
+    const array<unsigned long long, 64> privateKeyArr2{ getPrivateKeyArr() };
+    const array<unsigned short, 64> publicKeyArr{ getPublicKeyArr(pArr, privateKeyArr1) };
+    const string key{ getAESKey(pArr, privateKeyArr2, publicKeyArr) };
     string text;
-    cout << "\nEnter text: ";
-    ws(cin);
+    cout << "Enter text: ";
     getline(cin, text);
     string encryptedString{ encrypt(key, text) };
     cout << "The encrypted string is: " << encryptedString << '\n';
     string decryptedString{ decrypt(key, encryptedString) };
     cout << "The decrypted string is: " << decryptedString << '\n';
-    */
-    constexpr unsigned long long privateKey{ 9427224058058126247 };
-    constexpr unsigned short p{ 439 };
-    unsigned short publicKey1{ getPublicKey1(p, privateKey) };
-    cout << getMasterKey(p, privateKey, publicKey1) << '\n';
     system("pause");
     return 1;
 }
