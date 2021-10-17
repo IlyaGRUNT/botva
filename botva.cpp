@@ -28,5 +28,5 @@ int main()
     string decryptedString{ decrypt(key, encryptedString) };
     cout << "The decrypted string is: " << decryptedString << '\n';
     system("pause");
-    return 1;
+    return 0;
 }
