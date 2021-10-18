@@ -24,6 +24,7 @@ int main()
     //cout << "The decrypted string is: " << decryptedString << '\n';
     //system("pause");
     //return 0;
+	/*
 	std::cout << "Enter your nickname: ";
 	char nickname[256];
 	std::cin >> nickname;
@@ -43,7 +44,7 @@ int main()
 		char msg[4096];
 		std::cin >> msg;
 		if (msg == sd) {
-			shutdown(sock, nickname);
+			shut_down(sock, nickname);
 			listenThread.detach();
 			break;
 		}
@@ -58,6 +59,14 @@ int main()
 			std::cout << "\nmessage sent";
 		}
 	}
+	*/
+	std::string x;
+	
+	SOCKET sock = createSocket();
+	connectServ(sock);
+	std::cin >> x;
+	shutdown(sock, 2);
+	closesocket(sock);
 
 	system("pause");
 	return 0;

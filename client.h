@@ -14,5 +14,5 @@ void listenF();
 SOCKET createSocket();
 void connectServ(SOCKET sock);
 void init(SOCKET sock, char nickname[256]);
-void shutdown(SOCKET sock, char nickname[256]);
+void shut_down(SOCKET sock, char nickname[256]);
 void sendMessage(SOCKET sock, char nickname[256], char dest[256], char msg[4096]);

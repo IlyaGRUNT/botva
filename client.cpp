@@ -12,7 +12,7 @@
 #include "AES.h"
 
 #define ip   "25.33.129.217"
-#define port 53412
+#define port 5341
 
 using namespace std::this_thread;
 using namespace std::chrono;
@@ -108,6 +108,7 @@ void listenF() {
 		std::string AES_key = getAESKey(p_arr, private_keys, DH_str_to);
 		char ch_msg[4096];
 		recv(newinit, ch_msg, sizeof(ch_msg), NULL);
+		shutdown(newinit, 2);
 		closesocket(newinit);
 		std::string msg{ ch_msg };
 		std::string decrypted_msg = decrypt(AES_key, msg);
@@ -137,6 +138,7 @@ void connectServ(SOCKET sock) {
 	sock_addr.sin_family = AF_INET;
 	int size{ sizeof(sock_addr) };
 	connect(sock, (SOCKADDR*)&sock_addr, size);
+	std::cout << WSAGetLastError();
 }
 
 void init(SOCKET sock, char nickname[256]) {
@@ -148,7 +150,7 @@ void init(SOCKET sock, char nickname[256]) {
 	closesocket(sock);
 }
 
-void shutdown(SOCKET sock, char nickname[256]) {
+void shut_down(SOCKET sock, char nickname[256]) {
 	connectServ(sock);
 	char mode[256] = "shut_down";
 	send(sock, mode, sizeof(mode), NULL);
