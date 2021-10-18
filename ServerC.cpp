@@ -4,7 +4,6 @@
 #include <ws2tcpip.h>
 #include <bitset>
 #include <map>
-#include <boost/algorithm/string.hpp>
 
 wchar_t* toPCW(const std::string s)
 {
@@ -43,7 +42,7 @@ int main(int argc, char* argv[]) {
 	char error = 1;
 
 	WSADATA WSAdata;
-	WORD DLLVersion = MAKEWORD(2, 1) ;
+	WORD DLLVersion = MAKEWORD(2, 1);
 	if (WSAStartup(DLLVersion, &WSAdata) != 0) {
 		std::cout << "EROR WSAStartup\n";
 		exit(1);
@@ -51,12 +50,13 @@ int main(int argc, char* argv[]) {
 
 	SOCKADDR_IN sock_addr;
 	sock_addr.sin_addr.s_addr = INADDR_ANY;
-	sock_addr.sin_port = htons(53412);	
+	sock_addr.sin_port = htons(53412);
 	sock_addr.sin_family = AF_INET;
 	SOCKADDR_IN client_addr;
 
 	int size = sizeof(sock_addr);
 
+	std::cout << "Server initialized\n";
 	while (true) {
 		SOCKET sListen = socket(AF_INET, SOCK_STREAM, NULL);
 		if (sListen == INVALID_SOCKET) {
@@ -66,7 +66,6 @@ int main(int argc, char* argv[]) {
 
 		u_long i_mode = 0;
 		ioctlsocket(sListen, FIONBIO, &i_mode);
-		std::cout << ioctlsocket(sListen, FIONBIO, &i_mode);
 
 		bind(sListen, (SOCKADDR*)&sock_addr, size);
 
@@ -74,6 +73,7 @@ int main(int argc, char* argv[]) {
 
 		SOCKET newConnection;
 		int client_size = sizeof(client_addr);
+		std::cout << "Waiting for connection\n";
 		newConnection = accept(sListen, (SOCKADDR*)&client_addr, &client_size);
 
 		if (newConnection == 0)
@@ -96,6 +96,7 @@ int main(int argc, char* argv[]) {
 				std::string ip{ char_ip };
 				std::string nickname{ char_nickname };
 				users[nickname] = ip;
+				shutdown(newConnection, 2);
 				closesocket(newConnection);
 			}
 			if (mode == "shut_down") {
@@ -104,17 +105,20 @@ int main(int argc, char* argv[]) {
 				recv(newConnection, char_nickname, sizeof(char_nickname), NULL);
 				std::string nickname{ char_nickname };
 				users.erase(nickname);
+				shutdown(newConnection, 2);
 				closesocket(newConnection);
 			}
 			if (mode == "message") {
 				std::cout << "message\n";
 				char char_from[256];
 				char char_to[256];
+				char p_set[512];
 				char DH_set_to[512];
 				recv(newConnection, char_from, sizeof(char_from), NULL);
 				std::string from{ char_from };
 				recv(newConnection, char_to, sizeof(char_to), NULL);
 				std::string to{ char_to };
+				recv(newConnection, p_set, sizeof(p_set), NULL);
 				recv(newConnection, DH_set_to, sizeof(DH_set_to), NULL);
 				if (users.find(from) == users.end()) {
 					char msg[255] = "Your connection is not initialized";
@@ -143,6 +147,7 @@ int main(int argc, char* argv[]) {
 					else {
 						char DH_set_from[512];
 						char message[4096];
+						send(toConnection, p_set, sizeof(p_set), NULL);
 						send(toConnection, DH_set_to, sizeof(DH_set_to), NULL);
 						recv(toConnection, DH_set_from, sizeof(DH_set_from), NULL);
 						send(newConnection, ok + DH_set_from, sizeof(ok + DH_set_from), NULL);
