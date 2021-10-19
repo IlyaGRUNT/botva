@@ -6,13 +6,16 @@
 #include <array>
 #include <thread>
 
-std::array<unsigned short, 64> fromSet(std::string s);
-wchar_t* toPCW(const std::string s);
-char* toSet(std::array<unsigned short, 64> DH);
-char* deleteFromArray(char arr[256], unsigned short pos);
-void listenF();
-SOCKET createSocket();
-void connectServ(SOCKET sock);
-void init(SOCKET sock, char nickname[256]);
-void shut_down(SOCKET sock, char nickname[256]);
-void sendMessage(SOCKET sock, char nickname[256], char dest[256], char msg[4096]);
+namespace client {
+	std::vector<char*> from_ch(char* ch);
+	void to_ch(std::vector<char*> vec, char* ch);
+	std::array<unsigned short, 64> from_set(std::string s);
+	wchar_t* toPCW(const std::string s);
+	void to_set(std::array<unsigned short, 64> DH, char* dh_set);
+	void deleteFromArray(char* arr, unsigned short pos);
+	void listenF();
+	SOCKET createSocket();
+	void connectServ(SOCKET sock, int port);
+	int init(char* nickname);
+	void sendMessage(SOCKET sock, char* nickname, char* dest, char* msg);
+}

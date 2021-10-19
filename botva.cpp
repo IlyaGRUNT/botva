@@ -6,6 +6,7 @@
 using namespace std;
 using namespace AES;
 using namespace DH;
+using namespace client;
 
 int main()
 {
@@ -60,13 +61,10 @@ int main()
 		}
 	}
 	*/
-	std::string x;
-	
-	SOCKET sock = createSocket();
-	connectServ(sock);
-	std::cin >> x;
-	shutdown(sock, 2);
-	closesocket(sock);
+	char* nickname{};
+	std::cin >> nickname;
+	int _port = init(nickname);
+	std::cout << _port;
 
 	system("pause");
 	return 0;

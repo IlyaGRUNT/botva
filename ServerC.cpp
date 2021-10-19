@@ -7,8 +7,25 @@
 #include <thread>
 #include <chrono>
 #include <future>
+#include <sstream>
+
+constexpr char delim = ';';
 
 std::map<std::string, std::string> users;
+
+std::vector<char*> from_ch(char* ch) {
+	std::vector<char*> res;
+	std::string str = ch;
+	std::replace(str.begin(), str.end(), delim, ' ');
+	std::stringstream ss;
+	std::string tmp;
+	while (ss >> tmp) {
+		char* ch_tmp{};
+		std::copy(tmp.begin(), tmp.end(), ch_tmp);
+		res.push_back(ch_tmp);
+	}
+	return res;
+}
 
 wchar_t* toPCW(const std::string s)
 {
@@ -41,7 +58,7 @@ int GetBlockingMode(int Sock)
 	return 0;
 }
 
-void TCPThread(SOCKADDR_IN sock_addr) {
+void TCPThread(SOCKADDR_IN sock_addr, std::string nickname) {
 	constexpr char ok = 0;
 	constexpr char error = 1;
 
@@ -95,103 +112,104 @@ void TCPThread(SOCKADDR_IN sock_addr) {
 		//std::cout << WSAGetLastError() << '\n';
 		std::cout << "CLIENT CONNECTED\n";
 		//std::cout << str << '\n';
-		char char_mode[256];
-		recv(newConnection, char_mode, sizeof(char_mode), NULL);
-		std::string mode{ char_mode };
-		if (mode == "shut_down") {
-			std::cout << "shut down\n";
-			char char_nickname[256];
-			recv(newConnection, char_nickname, sizeof(char_nickname), NULL);
-			std::string nickname{ char_nickname };
-			users.erase(nickname);
-		}
-		if (mode == "message") {
-			std::cout << "message\n";
-			char char_from[256];
-			char char_to[256];
-			char p_set[512];
-			char DH_set_to[512];
-			recv(newConnection, char_from, sizeof(char_from), NULL);
-			std::string from{ char_from };
-			recv(newConnection, char_to, sizeof(char_to), NULL);
-			std::string to{ char_to };
-			recv(newConnection, p_set, sizeof(p_set), NULL);
-			recv(newConnection, DH_set_to, sizeof(DH_set_to), NULL);
-			if (users.find(from) == users.end()) {
-				char msg[255] = "Your connection is not initialized\n";
-				send(newConnection, error + msg, sizeof(error + msg), NULL);
+		char ch_data[1568];
+		while (true) {
+			recv(newConnection, ch_data, sizeof(ch_data), NULL);
+			std::string str_data = ch_data;
+			if (ch_data == "shutdown") {
+				break;
 			}
-			else if (users.find(to) == users.end()) {
-				char msg[255] = "User, you are trying to send message to, is offline\n";
-				send(newConnection, error + msg, sizeof(error + msg), NULL);
-			}
-			else {
-				SOCKADDR_IN to_sock_addr;
-				InetPton(AF_INET, toPCW(users[to]), &to_sock_addr.sin_addr.s_addr);
-				to_sock_addr.sin_port = htons(2584);
-				to_sock_addr.sin_family = AF_INET;
-				int to_size = sizeof(to_sock_addr);
+			else if (ch_data != "" || str_data.find(';') != std::string::npos) {
+				std::vector<char*> data = from_ch(ch_data);
 
-				SOCKET toConnection = socket(AF_INET, SOCK_STREAM, NULL);
-				if (connect(toConnection, (SOCKADDR*)&to_sock_addr, to_size) != 0) {
-					char msg[255] = "User, you are trying to send message to, is offline\n";
-					send(newConnection, error + msg, sizeof(error + msg), NULL);
-					shutdown(toConnection, 2);
-					closesocket(toConnection);
-				}
-				else {
-					char DH_set_from[512];
-					char message[4096];
-					send(toConnection, p_set, sizeof(p_set), NULL);
-					send(toConnection, DH_set_to, sizeof(DH_set_to), NULL);
-					recv(toConnection, DH_set_from, sizeof(DH_set_from), NULL);
-					send(newConnection, ok + DH_set_from, sizeof(ok + DH_set_from), NULL);
-					recv(newConnection, message, sizeof(message), NULL);
-					send(toConnection, message, sizeof(message), NULL);
-					shutdown(toConnection, 2);
-					closesocket(toConnection);
+				char* mode = data[0];
+
+				if (mode == "message") {
+					std::cout << "message\n";
+					char* char_from = data[1];
+					char* char_to = data[2];
+					char* p_set = data[3];
+					char* DH_set_to = data[4];
+
+					if (recv(newConnection, char_from, sizeof(char_from), NULL) == -1)
+						break;
+					std::string from{ char_from };
+					std::string to{ char_to };
+					if (users.find(from) == users.end()) {
+						const char* msg = "Your connection is not initialized\n";
+						send(newConnection, error + msg, sizeof(error + msg), NULL);
+					}
+					else if (users.find(to) == users.end()) {
+						const char* msg = "User, you are trying to send message to, is offline\n";
+						send(newConnection, error + msg, sizeof(error + msg), NULL);
+					}
+					else {
+						SOCKADDR_IN to_sock_addr;
+						InetPton(AF_INET, toPCW(users[to]), &to_sock_addr.sin_addr.s_addr);
+						to_sock_addr.sin_port = htons(0);
+						to_sock_addr.sin_family = AF_INET;
+						int to_size = sizeof(to_sock_addr);
+
+						SOCKET toConnection = socket(AF_INET, SOCK_STREAM, NULL);
+						if (connect(toConnection, (SOCKADDR*)&to_sock_addr, to_size) != 0) {
+							const char* msg = "User, you are trying to send message to, is offline\n";
+							send(newConnection, error + msg, sizeof(error + msg), NULL);
+						}
+						else {
+							char DH_set_from[512];
+							char message[4096];
+							
+							recv(toConnection, DH_set_from, sizeof(DH_set_from), NULL);
+							send(newConnection, ok + DH_set_from, sizeof(ok + DH_set_from), NULL);
+							recv(newConnection, message, sizeof(message), NULL);
+							send(toConnection, message, sizeof(message), NULL);
+						}
+					}
 				}
 			}
+			users.erase(nickname);
+			shutdown(newConnection, 2);
+			closesocket(newConnection);
 		}
 	}
-	shutdown(newConnection, 2);
-	closesocket(newConnection);
 }
 
 int main(int argc, char* argv[]) {
+	WSADATA WSAdata;
+	WORD DLLVersion = MAKEWORD(2, 1);
+	if (WSAStartup(DLLVersion, &WSAdata) != 0) {
+		std::cout << "EROR WSAStartup\n";
+		exit(1);
+	}
+
+	SOCKADDR_IN sock_addr;
+	sock_addr.sin_addr.s_addr = INADDR_ANY;
+	sock_addr.sin_port = htons(781);
+	sock_addr.sin_family = AF_INET;
+
+	int size = sizeof(sock_addr);
+
+	SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+	bind(sock, (SOCKADDR*)&sock_addr, size);
 	while (true) {
-		WSADATA WSAdata;
-		WORD DLLVersion = MAKEWORD(2, 1);
-		if (WSAStartup(DLLVersion, &WSAdata) != 0) {
-			std::cout << "EROR WSAStartup\n";
-			exit(1);
-		}
 
-		SOCKADDR_IN sock_addr;
-		sock_addr.sin_addr.s_addr = INADDR_ANY;
-		sock_addr.sin_port = htons(781);
-		sock_addr.sin_family = AF_INET;
-
-		int size = sizeof(sock_addr);
-
-		SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-
-		bind(sock, (SOCKADDR*)&sock_addr, size);
-
-		char nickname[256];
+		char ch_nickname[256];
 		SOCKADDR_IN client;
 		int client_size = sizeof(client);
 		
 		std::cout << "UDP waiting for connections\n";
 
-		recvfrom(sock, nickname, sizeof(nickname), NULL, (SOCKADDR*)&client, &client_size);
+		recvfrom(sock, ch_nickname, sizeof(ch_nickname), NULL, (SOCKADDR*)&client, &client_size);
+
+		std::string nickname = ch_nickname;
 
 		SOCKADDR_IN new_TCP_addr;
 		new_TCP_addr.sin_addr.s_addr = INADDR_ANY;
 		new_TCP_addr.sin_port = htons(0);
 		new_TCP_addr.sin_family = AF_INET;
 
-		std::async(TCPThread, new_TCP_addr);
+		std::async(TCPThread, new_TCP_addr, nickname);
 
 		char ch_port[256];
 		sprintf_s(ch_port, "%d", new_TCP_addr.sin_port);

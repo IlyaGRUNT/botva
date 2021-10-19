@@ -13,7 +13,7 @@ namespace DH {
 	std::vector<unsigned short> getActualSet(uint8_t g, unsigned short modulo);
 	std::uint8_t primeRoot(unsigned short modulo);
 	unsigned long long getPrivateKey();
-	std::array<unsigned short, 64> getPArr();
+	std::array<unsigned short, 64> getPArr(); 
 	std::array<unsigned long long, 64> getPrivateKeyArr();
 	std::array<unsigned short, 64> getPublicKeyArr(std::array<unsigned short, 64> pArr, std::array<unsigned long long, 64> privateKeyArr);
 	unsigned short getPublicKey(unsigned short p, unsigned long long privateKey);
