@@ -6,8 +6,12 @@
 #include <map>
 #include <thread>
 #include <chrono>
-#include <future>
 #include <sstream>
+#include <vector>
+#include <string>
+#include <algorithm>
+
+#define UDPport 781
 
 constexpr char delim = ';';
 
@@ -58,39 +62,23 @@ int GetBlockingMode(int Sock)
 	return 0;
 }
 
-void TCPThread(SOCKADDR_IN sock_addr, std::string nickname) {
+void TCPThread(int port, std::string nickname) {
 	constexpr char ok = 0;
 	constexpr char error = 1;
 
-	WSADATA WSAdata;
-	WORD DLLVersion = MAKEWORD(2, 1);
-	if (WSAStartup(DLLVersion, &WSAdata) != 0) {
-		std::cout << "EROR WSAStartup\n\n";
-	}
-
-	int size = sizeof(sock_addr);
-
-	SOCKET sListen = socket(AF_INET, SOCK_STREAM, NULL);
-	if (sListen == INVALID_SOCKET) {
-		std::cout << "ERROR sListen\n";
-	}
 	char enable = 1;
 	//setsockopt(sListen, SOL_SOCKET, SO_DONTLINGER, &enable , sizeof(char));
 	//setsockopt(sListen, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(char));
 
-	if (WSAGetLastError() != 0)
-		std::cout << WSAGetLastError() << " socket\n";
+	SOCKET sListen = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-	u_long i_mode = 0;
-	ioctlsocket(sListen, FIONBIO, &i_mode);
+	SOCKADDR_IN sListen_addr;
+	sListen_addr.sin_addr.s_addr = INADDR_ANY;
+	sListen_addr.sin_port = htons(port);
+	sListen_addr.sin_family = AF_INET;
+	int size = sizeof(sListen_addr);
 
-	if (WSAGetLastError() != 0)
-		std::cout << WSAGetLastError() << " ioctl\n";
-
-	bind(sListen, (SOCKADDR*)&sock_addr, size);
-
-	if (WSAGetLastError() != 0)
-		std::cout << WSAGetLastError() << " bind\n";
+	bind(sListen, (SOCKADDR*)&sListen_addr, size);
 
 	listen(sListen, SOMAXCONN);
 	if (WSAGetLastError() != 0)
@@ -99,7 +87,7 @@ void TCPThread(SOCKADDR_IN sock_addr, std::string nickname) {
 	SOCKADDR_IN client_addr;
 	SOCKET newConnection;
 	int client_size = sizeof(client_addr);
-	std::cout << "TCP waiting for connection\n";
+	std::cout << "\nTCP waiting for connection on port: " << port;
 	newConnection = accept(sListen, (SOCKADDR*)&client_addr, &client_size);
 
 	if (WSAGetLastError() != 0)
@@ -107,16 +95,16 @@ void TCPThread(SOCKADDR_IN sock_addr, std::string nickname) {
 
 
 	if (newConnection == 0)
-		std::cout << "ERROR newConnection\n";
+		std::cout << "\nERROR newConnection";
 	else {
-		//std::cout << WSAGetLastError() << '\n';
-		std::cout << "CLIENT CONNECTED\n";
+		//std::cout << LastError() << '\n';
+		std::cout << "\nCLIENT CONNECTED";
 		//std::cout << str << '\n';
-		char ch_data[1568];
+		char ch_data[8096];
 		while (true) {
 			recv(newConnection, ch_data, sizeof(ch_data), NULL);
 			std::string str_data = ch_data;
-			if (ch_data == "shutdown") {
+			if (ch_data == "/shutdown") {
 				break;
 			}
 			else if (ch_data != "" || str_data.find(';') != std::string::npos) {
@@ -125,7 +113,7 @@ void TCPThread(SOCKADDR_IN sock_addr, std::string nickname) {
 				char* mode = data[0];
 
 				if (mode == "message") {
-					std::cout << "message\n";
+					std::cout << "\nmessage";
 					char* char_from = data[1];
 					char* char_to = data[2];
 					char* p_set = data[3];
@@ -172,6 +160,7 @@ void TCPThread(SOCKADDR_IN sock_addr, std::string nickname) {
 			closesocket(newConnection);
 		}
 	}
+	std::terminate();
 }
 
 int main(int argc, char* argv[]) {
@@ -184,7 +173,7 @@ int main(int argc, char* argv[]) {
 
 	SOCKADDR_IN sock_addr;
 	sock_addr.sin_addr.s_addr = INADDR_ANY;
-	sock_addr.sin_port = htons(781);
+	sock_addr.sin_port = htons(UDPport);
 	sock_addr.sin_family = AF_INET;
 
 	int size = sizeof(sock_addr);
@@ -206,14 +195,28 @@ int main(int argc, char* argv[]) {
 
 		SOCKADDR_IN new_TCP_addr;
 		new_TCP_addr.sin_addr.s_addr = INADDR_ANY;
-		new_TCP_addr.sin_port = htons(0);
+		new_TCP_addr.sin_port = 0;
 		new_TCP_addr.sin_family = AF_INET;
+		int TCP_size = sizeof(new_TCP_addr);
 
-		std::async(TCPThread, new_TCP_addr, nickname);
+		SOCKET TCP_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		bind(TCP_socket, (SOCKADDR*)&new_TCP_addr, TCP_size);
 
-		char ch_port[256];
-		sprintf_s(ch_port, "%d", new_TCP_addr.sin_port);
-		sendto(sock, ch_port, sizeof(ch_port), NULL, (SOCKADDR*)&client, sizeof(client));
+		getsockname(TCP_socket, (SOCKADDR*)&new_TCP_addr, &TCP_size);
+		int port = new_TCP_addr.sin_port;
+		std::string str_port;
+		std::stringstream ss1;
+		ss1 << port;
+		ss1 >> str_port;
+		char* ch_port{};
+		ch_port = &str_port[0];
+
+		std::thread th(TCPThread, port, nickname);
+		th.detach();
+
+		/*int port = getsockname(TCP_socket, (SOCKADDR*)&new_TCP_addr, &TCP_size);*/
+
+		sendto(sock, ch_port, 8, NULL, (SOCKADDR*)&client, sizeof(client));
 
 		char ch_ip[256];
 		inet_ntop(AF_INET, &client, ch_ip, sizeof(ch_ip));

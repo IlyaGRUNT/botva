@@ -25,27 +25,35 @@ int main()
     //cout << "The decrypted string is: " << decryptedString << '\n';
     //system("pause");
     //return 0;
-	/*
 	std::cout << "Enter your nickname: ";
-	char nickname[256];
+	std::string nickname;
 	std::cin >> nickname;
+	char* ch_nickname{};
+	ch_nickname = &nickname[0];
 
-	SOCKET sock = createSocket();
+	WSADATA WSAdata;
+	WORD wVersion = MAKEWORD(2, 2);
+	WSAStartup(wVersion, &WSAdata);
+
+	int port = init(ch_nickname);
+	
+	SOCKET sock = connectServ(port);
 
 	char dest[256];
 	std::cout << "\nDestination: ";
 	std::cin >> dest;
 
-	char sd[4096] = "/shut_down";
-	char chDest[4096] = "/ch_dest";
+	const char* sd = "/shut_down";
+	const char* chDest = "/ch_dest";
 
 	std::thread listenThread(listenF);
-	init(sock, nickname);
 	while (true) {
-		char msg[4096];
-		std::cin >> msg;
+		char* msg{};
+		std::string str_msg;
+		std::cin >> str_msg;
+		msg = &str_msg[0];
 		if (msg == sd) {
-			shut_down(sock, nickname);
+			shut_down(sock);
 			listenThread.detach();
 			break;
 		}
@@ -55,12 +63,13 @@ int main()
 		}
 		else {
 			std::array<unsigned short, 64> p_arr = getPArr();
-			char p_set[512]{ *toSet(p_arr) };
-			sendMessage(sock, nickname, dest, msg);
+			char* p_set{};
+			to_set(p_arr, p_set);
+			sendMessage(sock, ch_nickname, dest, msg);
 			std::cout << "\nmessage sent";
 		}
 	}
-	*/
+	/*
 	WSADATA WSAdata;
 	WORD wVersion = MAKEWORD(2, 2);
 	WSAStartup(wVersion, &WSAdata);
@@ -71,6 +80,9 @@ int main()
 	ch_nickname = &nickname[0];
 	int _port = init(ch_nickname);
 	std::cout << _port;
+
+	connectServ(_port);
+	*/
 
 	system("pause");
 	return 0;

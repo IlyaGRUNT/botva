@@ -15,8 +15,8 @@ namespace client {
 	void to_set(std::array<unsigned short, 64> DH, char* dh_set);
 	void deleteFromArray(char* arr, unsigned short pos);
 	void listenF();
-	SOCKET createSocket();
-	void connectServ(SOCKET sock, int port);
+	SOCKET connectServ(int port);
 	int init(char* nickname);
+	void shut_down(SOCKET sock);
 	void sendMessage(SOCKET sock, char* nickname, char* dest, char* msg);
 }

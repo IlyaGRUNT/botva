@@ -147,33 +147,21 @@ namespace client {
 			closesocket(newinit);
 			std::string msg{ ch_msg };
 			std::string decrypted_msg = decrypt(AES_key, msg);
-			std::cout << '\n' << nickname_to << ": " << msg;
 		}
 	}
 
-	SOCKET createSocket() {
-		WSADATA WSAdata;
-		WORD DLLVersion = MAKEWORD(2, 1);
-		if (WSAStartup(DLLVersion, &WSAdata) != 0) {
-			std::cout << "EROR WSAStartup\n";
-			exit(1);
-		}
-
-		SOCKET sock = socket(AF_INET, SOCK_STREAM, NULL);
-		if (sock == INVALID_SOCKET)
-			std::cout << "ERROR";
-
-		return sock;
-	}
-
-	void connectServ(SOCKET sock, int port) {
+	SOCKET connectServ(int port) {
 		SOCKADDR_IN sock_addr;
 		InetPton(AF_INET, toPCW(ip), &sock_addr.sin_addr.s_addr);
 		sock_addr.sin_port = htons(port);
 		sock_addr.sin_family = AF_INET;
+
+		SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
 		int size{ sizeof(sock_addr) };
 		connect(sock, (SOCKADDR*)&sock_addr, size);
-		std::cout << WSAGetLastError();
+		std::cout << "WSAEROOR FROM CONNECTSERV: " << WSAGetLastError() << '\n';
+		return sock;
 	}
 
 	int init(char* nickname) {
@@ -189,13 +177,21 @@ namespace client {
 
 		sendto(sock, nickname, sizeof(nickname), NULL, (SOCKADDR*)&serv_addr, sizeof(serv_addr));
 
-		std::cout << WSAGetLastError();
+		std::cout << "WSA ERROR FROM INIT: " << WSAGetLastError() << '\n';
 
-		char ch_port[16];
-		recvfrom(sock, ch_port, sizeof(ch_port), NULL, &tmp, &size);
-		int _port = boost::lexical_cast<int>(ch_port);
+		char ch_port[7];
+		recvfrom(sock, ch_port, 7, NULL, &tmp, &size);
+		std::cout << "\nch_port from recvfrom: " << ch_port << '\n';
+		int _port = atoi(ch_port);
 		
 		return _port;
+	}
+
+	void shut_down(SOCKET sock) {
+		const char* sd_cmd = "/shut down";
+		send(sock, sd_cmd, sizeof(sd_cmd), NULL);
+		shutdown(sock, 2);
+		closesocket(sock);
 	}
 
 	void sendMessage(SOCKET sock, char* nickname, char* dest, char* msg) {
@@ -207,27 +203,33 @@ namespace client {
 		std::array<unsigned short, 64>public_keys = getPublicKeyArr(p_arr, private_keys);
 		char* DH_set_to{};
 		to_set(public_keys, DH_set_to);
-		const char* mode = "message";
-		char* response{};
+		std::string str_mode = "message";
+		char* mode{};
+		mode = &str_mode[0];
+		std::vector<char*> request = { mode, nickname, dest, p_set, DH_set_to };
+		char ch_response[8096];
 		//send(sock, mode, sizeof(mode), NULL);
 		//send(sock, nickname, sizeof(nickname), NULL);
 		//send(sock, dest, sizeof(dest), NULL);
 		//send(sock, p_set, sizeof(p_set), NULL);
 		//send(sock, DH_set_to, sizeof(DH_set_to), NULL);
-		recv(sock, response, sizeof(response), NULL);
-		if (response[0] == 1) {
-			deleteFromArray(response, 0);
-			std::cout << response;
+		recv(sock, ch_response, sizeof(ch_response), NULL);
+		std::cout << "WSAERROR FROM SENDMESSAGGE: " << WSAGetLastError() << '\n';
+
+		std::vector<char*> response = from_ch(ch_response);
+
+		std::string str_err_code = "1";
+		char* err_code;
+		err_code = &str_err_code[0];
+		if (response[0] == err_code) {
+			std::cout << response[1];
 		}
 		else {
-			deleteFromArray(response, 0);
-			std::array<unsigned short, 64> DH_from = from_set(response);
+			std::array<unsigned short, 64> DH_from = from_set(response[1]);
 			std::string AES_key = getAESKey(p_arr, private_keys, DH_from);
 			std::string encrypted_msg = encrypt(AES_key, msg);
 			char* ch_encrypted_msg = &encrypted_msg[0];
 			send(sock, ch_encrypted_msg, sizeof(ch_encrypted_msg), NULL);
-			shutdown(sock, 2);
-			closesocket(sock);
 		}
 	}
 }
