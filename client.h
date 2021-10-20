@@ -5,6 +5,7 @@
 #include <string>
 #include <array>
 #include <thread>
+#include <vector>
 
 namespace client {
 	std::vector<char*> from_ch(char* ch);

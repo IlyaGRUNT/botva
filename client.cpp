@@ -14,7 +14,7 @@
 #include "AES.h"
 
 #define ip       "25.33.129.217"
-#define UDP_port 5341
+#define UDP_port 781
 
 constexpr char delim{ ';' };
 constexpr char set_delim{ '#' };
@@ -26,13 +26,13 @@ using namespace AES;
 
 namespace client {
 	std::vector<char*> from_ch(char* ch) {
-		std::vector<char*> res;
+		std::vector<char*> res{};
 		std::string str = ch;
 		std::replace(str.begin(), str.end(), delim, ' ');
 		std::stringstream ss;
 		std::string tmp;
 		while (ss >> tmp) {
-			char* ch_tmp;
+			char* ch_tmp{};
 			std::copy(tmp.begin(), tmp.end(), ch_tmp);
 			res.push_back(ch_tmp);
 		}
@@ -40,10 +40,10 @@ namespace client {
 	}
 
 	void to_ch(std::vector<char*> vec, char* ch) {
-		uint8_t vec_size = vec.size();
-		std::string str_res;
-		char* res;
-		for (uint8_t i = 0; i < vec_size; i++) {
+		int vec_size = vec.size();
+		std::string str_res{};
+		char* res{};
+		for (int i = 0; i < vec_size; i++) {
 			str_res += vec[i];
 			if (i != vec_size - 1)
 				str_res += delim;
@@ -125,7 +125,7 @@ namespace client {
 			SOCKET newinit;
 			int client_size = sizeof(client_addr);
 			newinit = accept(sListen, (SOCKADDR*)&client_addr, &client_size);
-			char* ch_respond1;
+			char* ch_respond1{};
 			recv(newinit, ch_respond1, sizeof(ch_respond1), NULL);
 			std::vector<char*> respond1 = from_ch(ch_respond1);
 			char* nickname_to = respond1[0];
@@ -137,7 +137,7 @@ namespace client {
 			std::array<unsigned short, 64> DH_str_to = from_set(DH_set_to);
 			std::array<unsigned long long, 64> private_keys = getPrivateKeyArr();
 			std::array<unsigned short, 64> public_keys = getPublicKeyArr(p_arr, private_keys);
-			char* DH_set_from; 
+			char* DH_set_from{};
 			to_set(public_keys, DH_set_from);
 			send(newinit, DH_set_from, sizeof(DH_set_from), NULL);
 			std::string AES_key = getAESKey(p_arr, private_keys, DH_str_to);
@@ -189,6 +189,8 @@ namespace client {
 
 		sendto(sock, nickname, sizeof(nickname), NULL, (SOCKADDR*)&serv_addr, sizeof(serv_addr));
 
+		std::cout << WSAGetLastError();
+
 		char ch_port[16];
 		recvfrom(sock, ch_port, sizeof(ch_port), NULL, &tmp, &size);
 		int _port = boost::lexical_cast<int>(ch_port);
@@ -199,14 +201,14 @@ namespace client {
 	void sendMessage(SOCKET sock, char* nickname, char* dest, char* msg) {
 		char error = 1;
 		std::array<unsigned short, 64>p_arr = getPArr();
-		char* p_set;
+		char* p_set{};
 		to_set(p_arr, p_set);
 		std::array<unsigned long long, 64>private_keys = getPrivateKeyArr();
 		std::array<unsigned short, 64>public_keys = getPublicKeyArr(p_arr, private_keys);
-		char* DH_set_to;
+		char* DH_set_to{};
 		to_set(public_keys, DH_set_to);
 		const char* mode = "message";
-		char* response;
+		char* response{};
 		//send(sock, mode, sizeof(mode), NULL);
 		//send(sock, nickname, sizeof(nickname), NULL);
 		//send(sock, dest, sizeof(dest), NULL);

@@ -61,9 +61,15 @@ int main()
 		}
 	}
 	*/
-	char* nickname{};
+	WSADATA WSAdata;
+	WORD wVersion = MAKEWORD(2, 2);
+	WSAStartup(wVersion, &WSAdata);
+
+	std::string nickname{};
 	std::cin >> nickname;
-	int _port = init(nickname);
+	char* ch_nickname{};
+	ch_nickname = &nickname[0];
+	int _port = init(ch_nickname);
 	std::cout << _port;
 
 	system("pause");
