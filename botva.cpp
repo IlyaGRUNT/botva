@@ -28,14 +28,13 @@ int main()
 	std::cout << "Enter your nickname: ";
 	std::string nickname;
 	std::cin >> nickname;
-	char* ch_nickname{};
-	ch_nickname = &nickname[0];
+	const char* ch_nickname = nickname.c_str();
 
 	WSADATA WSAdata;
 	WORD wVersion = MAKEWORD(2, 2);
 	WSAStartup(wVersion, &WSAdata);
 
-	int port = init(ch_nickname);
+	int port = init(nickname);
 	
 	SOCKET sock = connectServ(port);
 
@@ -47,42 +46,27 @@ int main()
 	const char* chDest = "/ch_dest";
 
 	std::thread listenThread(listenF);
+	listenThread.detach();
 	while (true) {
 		char* msg{};
 		std::string str_msg;
+		std::cout << "Enter your message: ";
 		std::cin >> str_msg;
 		msg = &str_msg[0];
 		if (msg == sd) {
 			shut_down(sock);
-			listenThread.detach();
 			break;
 		}
 		else if (msg == chDest) {
-			std::cout << "\nDestination: ";
+			std::cout << "Destination: ";
 			std::cin >> dest;
 		}
 		else {
-			std::array<unsigned short, 64> p_arr = getPArr();
-			char* p_set{};
-			to_set(p_arr, p_set);
-			sendMessage(sock, ch_nickname, dest, msg);
-			std::cout << "\nmessage sent";
+			bool error = sendMessage(sock, ch_nickname, dest, msg);
+			if (!error)
+				std::cout << "message sent\n";
 		}
 	}
-	/*
-	WSADATA WSAdata;
-	WORD wVersion = MAKEWORD(2, 2);
-	WSAStartup(wVersion, &WSAdata);
-
-	std::string nickname{};
-	std::cin >> nickname;
-	char* ch_nickname{};
-	ch_nickname = &nickname[0];
-	int _port = init(ch_nickname);
-	std::cout << _port;
-
-	connectServ(_port);
-	*/
 
 	system("pause");
 	return 0;

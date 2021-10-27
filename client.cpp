@@ -9,15 +9,17 @@
 #include <array>
 #include <sstream>
 #include <vector>
-#include <boost/lexical_cast.hpp>
 #include "DH.h"
 #include "AES.h"
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
 
 #define ip       "25.33.129.217"
 #define UDP_port 781
 
-constexpr char delim{ ';' };
-constexpr char set_delim{ '#' };
+char delim{ ';' };
+char set_delim{ '#' };
+char to_fixed_symbol{ '@' };
 
 using namespace std::this_thread;
 using namespace std::chrono;
@@ -25,31 +27,32 @@ using namespace DH;
 using namespace AES;
 
 namespace client {
-	std::vector<char*> from_ch(char* ch) {
-		std::vector<char*> res{};
-		std::string str = ch;
-		std::replace(str.begin(), str.end(), delim, ' ');
-		std::stringstream ss;
-		std::string tmp;
-		while (ss >> tmp) {
-			char* ch_tmp{};
-			std::copy(tmp.begin(), tmp.end(), ch_tmp);
-			res.push_back(ch_tmp);
-		}
-		return res;
+	std::string to_fixed_length(std::string str, unsigned short len) {
+		for (unsigned short i = str.length(); i < len; i++)
+			str += to_fixed_symbol;
+		return str;
 	}
 
-	void to_ch(std::vector<char*> vec, char* ch) {
-		int vec_size = vec.size();
-		std::string str_res{};
-		char* res{};
-		for (int i = 0; i < vec_size; i++) {
-			str_res += vec[i];
-			if (i != vec_size - 1)
-				str_res += delim;
+	std::vector<std::string> from_ch(std::string str) {
+		std::string str_delim(1, delim);
+		std::vector<std::string> res;
+		boost::split(res, str, boost::is_any_of(str_delim), boost::token_compress_on);
+		return res;
+	}
+	
+	std::string to_ch(std::vector<const char*> vec, unsigned short len) {
+		std::vector<char*> non_const_vec;
+		for (unsigned short i = 0; i < vec.size(); i++) {
+			const char* tmp = vec[i];
+			char* non_const_tmp = const_cast<char*>(tmp);
+			non_const_vec.push_back(non_const_tmp);
 		}
-		std::copy(str_res.begin(), str_res.end(), res);
-		ch = res;
+		std::string str_delim(1, delim);
+		std::stringstream ss;
+		std::copy(non_const_vec.begin(), non_const_vec.end(), std::ostream_iterator<char*>(ss, str_delim.c_str()));
+		std::string str = ss.str();
+		str = to_fixed_length(str, len);
+		return str;
 	}
 
 	std::array<unsigned short, 64> from_set(std::string s) {
@@ -58,8 +61,7 @@ namespace client {
 		for (uint8_t i = 0; i < 64; i++) {
 			std::string substr;
 			getline(s_stream, substr, set_delim);
-			char* ch_substr;
-			ch_substr = &substr[0];
+			const char* ch_substr = substr.c_str();
 			result[i] = std::atoi(ch_substr);
 		}
 		return result;
@@ -73,27 +75,19 @@ namespace client {
 		return wString;
 	}
 
-	void to_set(std::array<unsigned short, 64> DH, char* dh_set) {
-		std::string DHtemp;
-		for (uint8_t i = 0; i < 64; i++) {
-			std::stringstream ss;
-			ss << DH[i];
-			std::string str = ss.str();
-			DHtemp.append(str);
-			if (i != 63)
-				DHtemp += set_delim;
-		}
-		char* DHstr;
-		DHstr = &DHtemp[0];
-		dh_set = DHstr;
+	std::string to_set(std::array<unsigned short, 64> DH) {
+		std::string str_delim(1, set_delim);
+		std::stringstream ss;
+		std::copy(DH.begin(), DH.end(), std::ostream_iterator<unsigned short>(ss, str_delim.c_str()));
+		return ss.str();
 	}
-
 	void deleteFromArray(char* arr, unsigned short pos) {
 		for (unsigned short i = pos; i < 255; i++)
 		{
 			arr[i] = arr[i + 1];
 		}
 	}
+	
 
 	void listenF() {
 		WSADATA WSAdata;
@@ -105,7 +99,7 @@ namespace client {
 
 		SOCKADDR_IN sock_addr;
 		sock_addr.sin_addr.s_addr = INADDR_ANY;
-		sock_addr.sin_port = htons(53412);
+		sock_addr.sin_port = htons(998);
 		sock_addr.sin_family = AF_INET;
 		SOCKADDR_IN client_addr;
 
@@ -116,7 +110,6 @@ namespace client {
 
 			u_long i_mode = 0;
 			ioctlsocket(sListen, FIONBIO, &i_mode);
-			std::cout << ioctlsocket(sListen, FIONBIO, &i_mode);
 
 			bind(sListen, (SOCKADDR*)&sock_addr, size);
 
@@ -125,20 +118,31 @@ namespace client {
 			SOCKET newinit;
 			int client_size = sizeof(client_addr);
 			newinit = accept(sListen, (SOCKADDR*)&client_addr, &client_size);
-			char* ch_respond1{};
-			recv(newinit, ch_respond1, sizeof(ch_respond1), NULL);
-			std::vector<char*> respond1 = from_ch(ch_respond1);
-			char* nickname_to = respond1[0];
-			char* p_set = respond1[1];
-			char* DH_set_to = respond1[2];
+			char ch_response1[512];
+			recv(newinit, ch_response1, sizeof(ch_response1), NULL);
+			if (ch_response1 && !ch_response1[0]) 
+				break;
+
+			std::string str_response1 = ch_response1;
+			std::vector<std::string> str_vec_response1 = from_ch(str_response1);
+			std::vector<char*> response1;
+			for (uint8_t i = 0; i < str_response1.size(); i++) {
+				std::string str_tmp = str_vec_response1[i];
+				char* ch_tmp = &str_tmp[0];
+				response1.push_back(ch_tmp);
+			}
+
+			char* nickname_to = response1[0];
+			char* p_set = response1[1];
+			char* DH_set_to = response1[2];
 
 			std::array<unsigned short, 64> p_arr = from_set(p_set);
 
 			std::array<unsigned short, 64> DH_str_to = from_set(DH_set_to);
 			std::array<unsigned long long, 64> private_keys = getPrivateKeyArr();
 			std::array<unsigned short, 64> public_keys = getPublicKeyArr(p_arr, private_keys);
-			char* DH_set_from{};
-			to_set(public_keys, DH_set_from);
+			std::string DH_str_from = to_set(public_keys);
+			char* DH_set_from = &DH_str_from[0];
 			send(newinit, DH_set_from, sizeof(DH_set_from), NULL);
 			std::string AES_key = getAESKey(p_arr, private_keys, DH_str_to);
 			char ch_msg[4096];
@@ -160,13 +164,16 @@ namespace client {
 
 		int size{ sizeof(sock_addr) };
 		connect(sock, (SOCKADDR*)&sock_addr, size);
-		std::cout << "WSAEROOR FROM CONNECTSERV: " << WSAGetLastError() << '\n';
 		return sock;
 	}
 
-	int init(char* nickname) {
+	int init(std::string nickname) {
+		std::string nickname1 = nickname + ';';
+
 		SOCKADDR tmp;
 		int size = sizeof(tmp);
+
+		const char* ch_nickname = nickname1.c_str();
 
 		SOCKADDR_IN serv_addr;
 		InetPton(AF_INET, toPCW(ip), &serv_addr.sin_addr.s_addr);
@@ -175,13 +182,11 @@ namespace client {
 
 		SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
-		sendto(sock, nickname, sizeof(nickname), NULL, (SOCKADDR*)&serv_addr, sizeof(serv_addr));
-
-		std::cout << "WSA ERROR FROM INIT: " << WSAGetLastError() << '\n';
+		sendto(sock, ch_nickname, strlen(ch_nickname), NULL, (SOCKADDR*)&serv_addr, sizeof(serv_addr));
 
 		char ch_port[7];
 		recvfrom(sock, ch_port, 7, NULL, &tmp, &size);
-		std::cout << "\nch_port from recvfrom: " << ch_port << '\n';
+		std::cout << "ch_port from recvfrom: " << ch_port << '\n';
 		int _port = atoi(ch_port);
 		
 		return _port;
@@ -194,42 +199,47 @@ namespace client {
 		closesocket(sock);
 	}
 
-	void sendMessage(SOCKET sock, char* nickname, char* dest, char* msg) {
-		char error = 1;
+	bool sendMessage(SOCKET sock, const char* nickname, const char* dest, const char* msg) {
+		bool error = false;
 		std::array<unsigned short, 64>p_arr = getPArr();
-		char* p_set{};
-		to_set(p_arr, p_set);
+		std::string p_str = to_set(p_arr);
+		const char* p_set = p_str.c_str();
 		std::array<unsigned long long, 64>private_keys = getPrivateKeyArr();
 		std::array<unsigned short, 64>public_keys = getPublicKeyArr(p_arr, private_keys);
-		char* DH_set_to{};
-		to_set(public_keys, DH_set_to);
+		std::string DH_str_to = to_set(public_keys);
+		const char* DH_set_to = DH_str_to.c_str();
 		std::string str_mode = "message";
-		char* mode{};
-		mode = &str_mode[0];
-		std::vector<char*> request = { mode, nickname, dest, p_set, DH_set_to };
-		char ch_response[8096];
-		//send(sock, mode, sizeof(mode), NULL);
-		//send(sock, nickname, sizeof(nickname), NULL);
-		//send(sock, dest, sizeof(dest), NULL);
-		//send(sock, p_set, sizeof(p_set), NULL);
-		//send(sock, DH_set_to, sizeof(DH_set_to), NULL);
+		const char* mode = str_mode.c_str();
+		std::vector<const char*> vec_request = { mode, nickname, dest, p_set, DH_set_to };
+		std::string str_request = to_ch(vec_request, 8192);
+		const char* request = str_request.c_str();
+		std::cout << request;
+		send(sock, request, 8192, NULL);
+		char ch_response[8192];
 		recv(sock, ch_response, sizeof(ch_response), NULL);
-		std::cout << "WSAERROR FROM SENDMESSAGGE: " << WSAGetLastError() << '\n';
+		std::string str_response = ch_response;
 
-		std::vector<char*> response = from_ch(ch_response);
+		std::vector<std::string> str_vec_response = from_ch(str_response);
 
-		std::string str_err_code = "1";
-		char* err_code;
-		err_code = &str_err_code[0];
-		if (response[0] == err_code) {
-			std::cout << response[1];
+		if (str_vec_response[0] == "er") {
+			error = true;
+			std::cout << "error: " << str_vec_response[1] << '\n';
 		}
 		else {
+			std::vector<const char*> response;
+			for (uint8_t i = 0; i < str_response.size(); i++) {
+				std::string str_tmp = str_vec_response[i];
+				const char* ch_tmp = str_tmp.c_str();
+				response.push_back(ch_tmp);
+			}
+
+
 			std::array<unsigned short, 64> DH_from = from_set(response[1]);
 			std::string AES_key = getAESKey(p_arr, private_keys, DH_from);
 			std::string encrypted_msg = encrypt(AES_key, msg);
-			char* ch_encrypted_msg = &encrypted_msg[0];
-			send(sock, ch_encrypted_msg, sizeof(ch_encrypted_msg), NULL);
+			const char* ch_encrypted_msg = encrypted_msg.c_str();
+			send(sock, ch_encrypted_msg, 4096, NULL);
 		}
+		return error;
 	}
 }

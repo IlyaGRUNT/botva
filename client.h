@@ -8,15 +8,16 @@
 #include <vector>
 
 namespace client {
-	std::vector<char*> from_ch(char* ch);
-	void to_ch(std::vector<char*> vec, char* ch);
+	std::string to_fixed_length(std::string str, unsigned short len);
+	std::vector<std::string> from_ch(std::string str);
+	std::string to_ch(std::vector<const char*> vec, unsigned short len);
 	std::array<unsigned short, 64> from_set(std::string s);
 	wchar_t* toPCW(const std::string s);
-	void to_set(std::array<unsigned short, 64> DH, char* dh_set);
+	std::string to_set(std::array<unsigned short, 64> DH);
 	void deleteFromArray(char* arr, unsigned short pos);
 	void listenF();
 	SOCKET connectServ(int port);
-	int init(char* nickname);
+	int init(std::string nickname);
 	void shut_down(SOCKET sock);
-	void sendMessage(SOCKET sock, char* nickname, char* dest, char* msg);
+	bool sendMessage(SOCKET sock, const char* nickname, const char* dest, const char* msg);
 }
