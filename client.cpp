@@ -90,6 +90,7 @@ namespace client {
 	
 
 	void listenF() {
+		std::cout << "biba";
 		WSADATA WSAdata;
 		WORD DLLVersion = MAKEWORD(2, 1);
 		if (WSAStartup(DLLVersion, &WSAdata) != 0) {
@@ -117,24 +118,19 @@ namespace client {
 
 			SOCKET newinit;
 			int client_size = sizeof(client_addr);
+			std::cout << "waiting for server to connect\n";
 			newinit = accept(sListen, (SOCKADDR*)&client_addr, &client_size);
-			char ch_response1[512];
+			std::cout << "server connected\n";
+			char ch_response1[2048];
 			recv(newinit, ch_response1, sizeof(ch_response1), NULL);
-			if (ch_response1 && !ch_response1[0]) 
-				break;
+			std::cout << "recieved ch_response\n";
 
 			std::string str_response1 = ch_response1;
 			std::vector<std::string> str_vec_response1 = from_ch(str_response1);
-			std::vector<char*> response1;
-			for (uint8_t i = 0; i < str_response1.size(); i++) {
-				std::string str_tmp = str_vec_response1[i];
-				char* ch_tmp = &str_tmp[0];
-				response1.push_back(ch_tmp);
-			}
 
-			char* nickname_to = response1[0];
-			char* p_set = response1[1];
-			char* DH_set_to = response1[2];
+			const char* nickname_to = str_vec_response1[0].c_str();
+			const char* p_set = str_vec_response1[1].c_str();
+			const char* DH_set_to = str_vec_response1[2].c_str();
 
 			std::array<unsigned short, 64> p_arr = from_set(p_set);
 
@@ -142,8 +138,9 @@ namespace client {
 			std::array<unsigned long long, 64> private_keys = getPrivateKeyArr();
 			std::array<unsigned short, 64> public_keys = getPublicKeyArr(p_arr, private_keys);
 			std::string DH_str_from = to_set(public_keys);
-			char* DH_set_from = &DH_str_from[0];
-			send(newinit, DH_set_from, sizeof(DH_set_from), NULL);
+			DH_str_from = to_fixed_length(DH_str_from, 512);
+			const char* DH_set_from = DH_str_from.c_str();
+			send(newinit, DH_set_from, 512, NULL);
 			std::string AES_key = getAESKey(p_arr, private_keys, DH_str_to);
 			char ch_msg[4096];
 			recv(newinit, ch_msg, sizeof(ch_msg), NULL);
@@ -210,13 +207,13 @@ namespace client {
 		const char* DH_set_to = DH_str_to.c_str();
 		std::string str_mode = "message";
 		const char* mode = str_mode.c_str();
-		std::vector<const char*> vec_request = { mode, nickname, dest, p_set, DH_set_to };
+		std::vector<const char*> vec_request = { mode, dest, p_set, DH_set_to };
 		std::string str_request = to_ch(vec_request, 8192);
 		const char* request = str_request.c_str();
-		std::cout << request;
 		send(sock, request, 8192, NULL);
 		char ch_response[8192];
 		recv(sock, ch_response, sizeof(ch_response), NULL);
+		std::cout << "recieved response";
 		std::string str_response = ch_response;
 
 		std::vector<std::string> str_vec_response = from_ch(str_response);
@@ -236,9 +233,11 @@ namespace client {
 
 			std::array<unsigned short, 64> DH_from = from_set(response[1]);
 			std::string AES_key = getAESKey(p_arr, private_keys, DH_from);
-			std::string encrypted_msg = encrypt(AES_key, msg);
+			std::string encrypted_msg = to_fixed_length(encrypt(AES_key, msg), 4096);
 			const char* ch_encrypted_msg = encrypted_msg.c_str();
 			send(sock, ch_encrypted_msg, 4096, NULL);
+			std::cout << "send_message wsaerror: " << WSAGetLastError() << '\n';
+			std::cout << "message sent\n";
 		}
 		return error;
 	}

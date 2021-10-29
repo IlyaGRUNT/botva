@@ -21,11 +21,32 @@ char to_fixed_symbol{ '@' };
 
 std::map<std::string, std::string> users;
 
+std::string to_fixed_length(std::string str, unsigned short len) {
+	for (unsigned short i = str.length(); i < len; i++)
+		str += to_fixed_symbol;
+	return str;
+}
+
 std::vector<std::string> from_ch(std::string str) {
 	std::string str_delim(1, delim);
 	std::vector<std::string> res;
 	boost::split(res, str, boost::is_any_of(str_delim), boost::token_compress_on);
 	return res;
+}
+
+std::string to_ch(std::vector<const char*> vec, unsigned short len) {
+	std::vector<char*> non_const_vec;
+	for (unsigned short i = 0; i < vec.size(); i++) {
+		const char* tmp = vec[i];
+		char* non_const_tmp = const_cast<char*>(tmp);
+		non_const_vec.push_back(non_const_tmp);
+	}
+	std::string str_delim(1, delim);
+	std::stringstream ss;
+	std::copy(non_const_vec.begin(), non_const_vec.end(), std::ostream_iterator<char*>(ss, str_delim.c_str()));
+	std::string str = ss.str();
+	str = to_fixed_length(str, len);
+	return str;
 }
 
 wchar_t* toPCW(const std::string s) {
@@ -90,20 +111,19 @@ void TCPThread(int port, std::string nickname) {
 					std::string mode = data[0];
 
 					if (mode == "message") {
-						const char* char_from = data[1].c_str();
-						const char* char_to = data[2].c_str();
-						const char* p_set = data[3].c_str();
-						const char* DH_set_to = data[4].c_str();
+						std::cout << '\n' << port << ": message";
+						const char* char_to = data[1].c_str();
+						const char* p_set = data[2].c_str();
+						const char*  DH_set_to = data[3].c_str();
 
-						std::string from{ char_from };
 						std::string to{ char_to };
-						if (users.find(from) == users.end()) {
+						if (users.find(nickname) == users.end()) {
 							const char* msg = "er;Your connection is not initialized";
 							std::cout << '\n' << port << ": " << msg;
 							send(newConnection, msg, 8192, NULL);
 						}
 						else if (users.find(to) == users.end()) {
-							const char* msg = "er;User, you are trying to send message to, is offline";
+							const char* msg = "er;User, you are trying to send message to, is offline1";
 							std::cout << '\n' << port << ": " << msg;
 							send(newConnection, msg, 8192, NULL);
 						}
@@ -116,11 +136,16 @@ void TCPThread(int port, std::string nickname) {
 
 							SOCKET toConnection = socket(AF_INET, SOCK_STREAM, NULL);
 							if (connect(toConnection, (SOCKADDR*)&to_sock_addr, to_size) != 0) {
-								const char* msg = "er;User, you are trying to send message to, is offline";
+								const char* msg = "er;User, you are trying to send message to, is offline2";
 								std::cout << '\n' << port << ": " << msg;
 								send(newConnection, msg, 8192, NULL);
 							}
 							else {
+								std::vector<const char*> vec_request = { nickname.c_str(), p_set, DH_set_to};
+								std::string str_request = to_ch(vec_request, 2048);
+
+								send(toConnection, str_request.c_str(), 2048, NULL);
+
 								char DH_set_from[512];
 								char message[4096];
 
