@@ -9,6 +9,8 @@
 #include <array>
 #include <sstream>
 #include <vector>
+#include <mutex>
+#include <condition_variable>
 #include "DH.h"
 #include "AES.h"
 #include <boost/algorithm/string/split.hpp>
@@ -20,6 +22,8 @@
 char delim{ ';' };
 char set_delim{ '#' };
 char to_fixed_symbol{ '@' };
+
+std::mutex mu;
 
 using namespace std::this_thread;
 using namespace std::chrono;
@@ -89,8 +93,8 @@ namespace client {
 	}
 	
 
-	void listenF() {
-		std::cout << "biba";
+	void listenF(int port) {
+		std::cout << "\nListenF thread started";
 		WSADATA WSAdata;
 		WORD DLLVersion = MAKEWORD(2, 1);
 		if (WSAStartup(DLLVersion, &WSAdata) != 0) {
@@ -99,8 +103,8 @@ namespace client {
 		}
 
 		SOCKADDR_IN sock_addr;
-		sock_addr.sin_addr.s_addr = INADDR_ANY;
-		sock_addr.sin_port = htons(998);
+		InetPton(AF_INET, toPCW(ip), &sock_addr.sin_addr.s_addr);
+		sock_addr.sin_port = htons(port);
 		sock_addr.sin_family = AF_INET;
 		SOCKADDR_IN client_addr;
 
@@ -109,26 +113,23 @@ namespace client {
 		while (true) {
 			SOCKET sListen = socket(AF_INET, SOCK_STREAM, NULL);
 
-			u_long i_mode = 0;
-			ioctlsocket(sListen, FIONBIO, &i_mode);
-
 			bind(sListen, (SOCKADDR*)&sock_addr, size);
 
 			listen(sListen, SOMAXCONN);
 
 			SOCKET newinit;
 			int client_size = sizeof(client_addr);
-			std::cout << "waiting for server to connect\n";
+			std::cout << "\nwaiting for server to connect";
 			newinit = accept(sListen, (SOCKADDR*)&client_addr, &client_size);
-			std::cout << "server connected\n";
+			std::cout << "\nserver connected";
 			char ch_response1[2048];
 			recv(newinit, ch_response1, sizeof(ch_response1), NULL);
-			std::cout << "recieved ch_response\n";
+			std::cout << "\nrecieved ch_response";
 
 			std::string str_response1 = ch_response1;
 			std::vector<std::string> str_vec_response1 = from_ch(str_response1);
 
-			const char* nickname_to = str_vec_response1[0].c_str();
+			std::string nickname_from = str_vec_response1[0];
 			const char* p_set = str_vec_response1[1].c_str();
 			const char* DH_set_to = str_vec_response1[2].c_str();
 
@@ -144,10 +145,10 @@ namespace client {
 			std::string AES_key = getAESKey(p_arr, private_keys, DH_str_to);
 			char ch_msg[4096];
 			recv(newinit, ch_msg, sizeof(ch_msg), NULL);
-			shutdown(newinit, 2);
-			closesocket(newinit);
 			std::string msg{ ch_msg };
 			std::string decrypted_msg = decrypt(AES_key, msg);
+
+			std::cout << '\n' << nickname_from << ": " << decrypted_msg;
 		}
 	}
 
@@ -164,7 +165,9 @@ namespace client {
 		return sock;
 	}
 
-	int init(std::string nickname) {
+	std::array<int, 2> init(std::string nickname) {
+		std::array<int, 2> res;
+
 		std::string nickname1 = nickname + ';';
 
 		SOCKADDR tmp;
@@ -181,12 +184,16 @@ namespace client {
 
 		sendto(sock, ch_nickname, strlen(ch_nickname), NULL, (SOCKADDR*)&serv_addr, sizeof(serv_addr));
 
-		char ch_port[7];
-		recvfrom(sock, ch_port, 7, NULL, &tmp, &size);
-		std::cout << "ch_port from recvfrom: " << ch_port << '\n';
-		int _port = atoi(ch_port);
+		char ch_ports[16];
+		recvfrom(sock, ch_ports, 16, NULL, &tmp, &size);
+		std::cout << "ch_port from recvfrom: " << ch_ports << '\n';
+		std::string str_ports = ch_ports;
+		std::vector<std::string> ports = from_ch(str_ports);
 		
-		return _port;
+		res[0] = std::stoi(ports[0]);
+		res[1] = std::stoi(ports[1]);
+
+		return res;
 	}
 
 	void shut_down(SOCKET sock) {

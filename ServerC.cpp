@@ -10,16 +10,25 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <condition_variable>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 
 #define UDPport 781
-#define TCPport 998
 
 char delim{ ';' };
 char to_fixed_symbol{ '@' };
 
-std::map<std::string, std::string> users;
+struct user {
+	std::unique_ptr<std::mutex> recv_mu;
+	std::unique_ptr<std::condition_variable> recv_cv;
+	std::unique_ptr<std::mutex> send_mu;
+	std::unique_ptr<std::condition_variable> send_cv;
+	std::string str_data;
+	bool shut_down{};
+};
+
+std::map<std::string, user> users;
 
 std::string to_fixed_length(std::string str, unsigned short len) {
 	for (unsigned short i = str.length(); i < len; i++)
@@ -56,7 +65,16 @@ wchar_t* toPCW(const std::string s) {
 	return wString;
 }
 
-void TCPThread(int port, std::string nickname) {
+void TCPRecvThread(int port, SOCKET sock, std::string nickname) {
+	std::mutex* self_mu = users[nickname].recv_mu.get();
+	std::condition_variable* self_cv = users[nickname].recv_cv.get();
+
+	std::unique_lock<std::mutex> self_lk(*self_mu);
+
+	std::mutex* send_mu = users[nickname].send_mu.get();
+	std::condition_variable* send_cv = users[nickname].send_cv.get();
+
+	std::unique_lock<std::mutex> send_lk(*send_mu);
 
 	unsigned short error = 0;
 
@@ -64,23 +82,13 @@ void TCPThread(int port, std::string nickname) {
 	//setsockopt(sListen, SOL_SOCKET, SO_DONTLINGER, &enable , sizeof(char));
 	//setsockopt(sListen, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(char));
 
-	SOCKET sListen = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
-	SOCKADDR_IN sListen_addr;
-	sListen_addr.sin_addr.s_addr = INADDR_ANY;
-	sListen_addr.sin_port = htons(port);
-	sListen_addr.sin_family = AF_INET;
-	int size = sizeof(sListen_addr);
-
-	bind(sListen, (SOCKADDR*)&sListen_addr, size);
-
-	listen(sListen, SOMAXCONN);
+	listen(sock, SOMAXCONN);
 
 	SOCKADDR_IN client_addr;
 	SOCKET newConnection;
 	int client_size = sizeof(client_addr);
 	std::cout << "\nTCP waiting for connection on port: " << port;
-	newConnection = accept(sListen, (SOCKADDR*)&client_addr, &client_size);
+	newConnection = accept(sock, (SOCKADDR*)&client_addr, &client_size);
 
 	if (newConnection == 0) {
 		std::cout << '\n' << port << ": failed to connect";
@@ -102,6 +110,15 @@ void TCPThread(int port, std::string nickname) {
 				recv(newConnection, ch_data, sizeof(ch_data), NULL);
 				std::string str_data = ch_data;
 				if (ch_data == "/shutdown") {
+					users[nickname].shut_down = true;
+
+					send_lk.unlock();
+					send_cv->notify_one();
+					send_lk.lock();
+
+					closesocket(sock);
+					closesocket(newConnection);
+
 					break;
 				}
 				else if (ch_data != "" || str_data.find(delim) != std::string::npos) {
@@ -117,49 +134,35 @@ void TCPThread(int port, std::string nickname) {
 						const char*  DH_set_to = data[3].c_str();
 
 						std::string to{ char_to };
-						if (users.find(nickname) == users.end()) {
-							const char* msg = "er;Your connection is not initialized";
-							std::cout << '\n' << port << ": " << msg;
-							send(newConnection, msg, 8192, NULL);
-						}
-						else if (users.find(to) == users.end()) {
-							const char* msg = "er;User, you are trying to send message to, is offline1";
-							std::cout << '\n' << port << ": " << msg;
-							send(newConnection, msg, 8192, NULL);
-						}
-						else {
-							SOCKADDR_IN to_sock_addr;
-							InetPton(AF_INET, toPCW(users[to]), &to_sock_addr.sin_addr.s_addr);
-							to_sock_addr.sin_port = htons(TCPport);
-							to_sock_addr.sin_family = AF_INET;
-							int to_size = sizeof(to_sock_addr);
+						std::vector<const char*> vec_request = { nickname.c_str(), p_set, DH_set_to};
+						std::string str_request = to_ch(vec_request, 2048);
 
-							SOCKET toConnection = socket(AF_INET, SOCK_STREAM, NULL);
-							if (connect(toConnection, (SOCKADDR*)&to_sock_addr, to_size) != 0) {
-								const char* msg = "er;User, you are trying to send message to, is offline2";
-								std::cout << '\n' << port << ": " << msg;
-								send(newConnection, msg, 8192, NULL);
-							}
-							else {
-								std::vector<const char*> vec_request = { nickname.c_str(), p_set, DH_set_to};
-								std::string str_request = to_ch(vec_request, 2048);
+						users[nickname].str_data = str_request;
+						send_lk.unlock();
+						send_cv->notify_one();
+						send_lk.lock();
+						
+						self_cv->wait(self_lk);
 
-								send(toConnection, str_request.c_str(), 2048, NULL);
+						std::string DH_str_from = users[nickname].str_data;
+						const char* DH_set_from = DH_str_from.c_str();
 
-								char DH_set_from[512];
-								char message[4096];
 
-								recv(toConnection, DH_set_from, 512, NULL);
+						std::string str_DH_set_from = DH_set_from;
+						std::string ok = "ok;";
+						std::string ok_str_DH_set_from = ok + str_DH_set_from;
 
-								std::string str_DH_set_from = DH_set_from;
-								std::string ok = "ok;";
-								std::string ok_str_DH_set_from = ok + str_DH_set_from;
+						send(newConnection, ok_str_DH_set_from.c_str(), 512, NULL);
 
-								send(newConnection, ok_str_DH_set_from.c_str(), 512, NULL);
-								recv(newConnection, message, 4096, NULL);
-								send(toConnection, message, 4096, NULL);
-							}
-						}
+						char message[4096];
+						recv(newConnection, message, 4096, NULL);
+
+						std::string str_msg = message;
+						users[nickname].str_data = message;
+
+						send_lk.unlock();
+						send_cv->notify_one();
+						send_lk.lock();
 					}
 					else {
 						error = 1;
@@ -181,6 +184,70 @@ void TCPThread(int port, std::string nickname) {
 		shutdown(newConnection, 2);
 		closesocket(newConnection);
 	}
+}
+
+void TCPSendThread(int port, SOCKET sock1, std::string nickname) {
+
+	listen(sock1, SOMAXCONN);
+
+	SOCKADDR client_addr;
+	int size = sizeof(client_addr);
+
+	SOCKET sock = accept(sock1, &client_addr, &size);
+	std::cout << '\n' << port << ": client connected to recv thread";
+
+	std::mutex* self_mu = users[nickname].send_mu.get();
+	std::condition_variable* self_cv = users[nickname].send_cv.get();
+
+	std::unique_lock<std::mutex> self_lk(*self_mu);
+
+	std::mutex* recv_mu = users[nickname].recv_mu.get();
+	std::condition_variable* recv_cv = users[nickname].recv_cv.get();
+
+	std::unique_lock<std::mutex> recv_lk(*recv_mu);
+
+	while (true) {
+		self_cv->wait(self_lk);
+
+		if (users[nickname].shut_down) {
+			users.erase(nickname);
+			closesocket(sock);
+			closesocket(sock1);
+			break;
+
+		}
+		
+		else {
+			std::string str_data = users[nickname].str_data.c_str();
+			send(sock, str_data.c_str(), str_data.length() + 1, NULL);
+
+			char DH_set[512];
+			recv(sock, DH_set, sizeof(DH_set), NULL);
+			std::string str_DH_set = DH_set;
+			users[nickname].str_data = DH_set;
+
+			recv_lk.unlock();
+			recv_cv->notify_one();
+			recv_lk.lock();
+
+			self_cv->wait(self_lk);
+
+			if (users[nickname].shut_down) {
+				users.erase(nickname);
+				closesocket(sock);
+				closesocket(sock1);
+				break;
+			}
+
+			else {
+				std::string msg = users[nickname].str_data;
+				send(sock, msg.c_str(), msg.length() + 1, NULL);
+
+				users[nickname].str_data = "";
+			}
+		}
+	}
+
 }
 
 int main(int argc, char* argv[]) {
@@ -214,40 +281,59 @@ int main(int argc, char* argv[]) {
 		std::string nickname = from_ch(raw_ch_nickname)[0];
 		const char* ch_nickname = nickname.c_str();
 
-		SOCKADDR_IN new_TCP_addr;
-		new_TCP_addr.sin_addr.s_addr = INADDR_ANY;
-		new_TCP_addr.sin_port = 0;
-		new_TCP_addr.sin_family = AF_INET;
-		int TCP_size = sizeof(new_TCP_addr);
+		std::string str = "";
+		users[nickname] = { std::make_unique<std::mutex>(), std::make_unique<std::condition_variable>(), std::make_unique<std::mutex>(), std::make_unique<std::condition_variable>(), str, false};
 
-		SOCKET TCP_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-		bind(TCP_socket, (SOCKADDR*)&new_TCP_addr, TCP_size);
+		SOCKADDR_IN recv_TCP_addr;
+		recv_TCP_addr.sin_addr.s_addr = INADDR_ANY;
+		recv_TCP_addr.sin_port = 0;
+		recv_TCP_addr.sin_family = AF_INET;
+		int recv_TCP_size = sizeof(recv_TCP_addr);
 
-		getsockname(TCP_socket, (SOCKADDR*)&new_TCP_addr, &TCP_size);
-		int port = new_TCP_addr.sin_port;
-		std::string str_port;
+		SOCKET recv_TCP_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		bind(recv_TCP_socket, (SOCKADDR*)&recv_TCP_addr, recv_TCP_size);
+
+		getsockname(recv_TCP_socket, (SOCKADDR*)&recv_TCP_addr, &recv_TCP_size);
+		int recv_port = recv_TCP_addr.sin_port;
+		std::string recv_str_port;
 		std::stringstream ss1;
-		ss1 << port;
-		ss1 >> str_port;
-		const char* ch_port{};
-		ch_port = &str_port[0];
+		ss1 << recv_port;
+		ss1 >> recv_str_port;
+		const char* recv_ch_port = recv_str_port.c_str();
 
-		std::thread th(TCPThread, port, nickname);
-		th.detach();
+		SOCKADDR_IN send_TCP_addr;
+		send_TCP_addr.sin_addr.s_addr = INADDR_ANY;
+		send_TCP_addr.sin_port = 0;
+		send_TCP_addr.sin_family = AF_INET;
+		int send_TCP_size = sizeof(send_TCP_addr);
 
-		/*int port = getsockname(TCP_socket, (SOCKADDR*)&new_TCP_addr, &TCP_size);*/
+		SOCKET send_TCP_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		bind(send_TCP_socket, (SOCKADDR*)&send_TCP_addr, send_TCP_size);
 
-		sendto(sock, ch_port, 8, NULL, (SOCKADDR*)&client, sizeof(client));
+		getsockname(send_TCP_socket, (SOCKADDR*)&send_TCP_addr, &send_TCP_size);
+		int send_port = send_TCP_addr.sin_port;
+		std::string send_str_port;
+		std::stringstream ss2;
+		ss2 << send_port;
+		ss2 >> send_str_port;
+		const char* send_ch_port = send_str_port.c_str();
+
+		std::thread recv_th(TCPRecvThread, recv_port, recv_TCP_socket, nickname);
+		recv_th.detach();
+		std::thread send_th(TCPRecvThread, send_port, send_TCP_socket, nickname);
+		send_th.detach();
+
+		std::string ports = to_ch({ recv_ch_port, send_ch_port }, 16);
+
+		/*int port = getsockname(TCP_socket, (SOCKADDR*)&recv_TCP_addr, &TCP_size);*/
+
+		sendto(sock, ports.c_str(), 16, NULL, (SOCKADDR*)&client, sizeof(client));
 
 		char ch_ip[256];
 		inet_ntop(AF_INET, &client, ch_ip, sizeof(ch_ip));
 		std::string ip = ch_ip;
 
-		users[nickname] = ip;
-
-		std::cout << "\nusers[" << nickname << "] = " << users[nickname];
-
-		std::cout << "\nCreated TCP thread with port: " << new_TCP_addr.sin_port;
+		std::cout << "\nCreated recv TCP thread with port: " << recv_TCP_addr.sin_port << "   send TCP thread with port: " << send_TCP_addr.sin_port;
 	}
 }
 

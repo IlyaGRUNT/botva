@@ -15,9 +15,9 @@ namespace client {
 	wchar_t* toPCW(const std::string s);
 	std::string to_set(std::array<unsigned short, 64> DH);
 	void deleteFromArray(char* arr, unsigned short pos);
-	void listenF();
+	void listenF(int port);
 	SOCKET connectServ(int port);
-	int init(std::string nickname);
+	std::array<int, 2> init(std::string nickname);
 	void shut_down(SOCKET sock);
 	bool sendMessage(SOCKET sock, const char* nickname, const char* dest, const char* msg);
 }

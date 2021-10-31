@@ -34,9 +34,9 @@ int main()
 	WORD wVersion = MAKEWORD(2, 2);
 	WSAStartup(wVersion, &WSAdata);
 
-	int port = init(nickname);
+	std::array<int, 2> ports = init(nickname);
 	
-	SOCKET sock = connectServ(port);
+	SOCKET sock = connectServ(ports[0]);
 
 	char dest[256];
 	std::cout << "\nDestination: ";
@@ -45,8 +45,7 @@ int main()
 	const char* sd = "/shut_down";
 	const char* chDest = "/ch_dest";
 
-	std::thread listenThread(listenF);
-	listenThread.detach();
+	std::thread listenThread(listenF, ports[1]);
 	while (true) {
 		char* msg{};
 		std::string str_msg;
@@ -67,7 +66,7 @@ int main()
 				std::cout << "message sent\n";
 		}
 	}
-
+	listenThread.detach();
 	system("pause");
 	return 0;
 }
