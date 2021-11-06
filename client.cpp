@@ -104,29 +104,21 @@ namespace client {
 
 		SOCKADDR_IN sock_addr;
 		InetPton(AF_INET, toPCW(ip), &sock_addr.sin_addr.s_addr);
-		sock_addr.sin_port = htons(port);
+		sock_addr.sin_port = port;
 		sock_addr.sin_family = AF_INET;
 		SOCKADDR_IN client_addr;
 
 		int size = sizeof(sock_addr);
 
+		SOCKET sock = socket(AF_INET, SOCK_STREAM, NULL);
+		connect(sock, (SOCKADDR*)&sock_addr, size);
+		std::cout << "\nrecv thread connected server";
 		while (true) {
-			SOCKET sListen = socket(AF_INET, SOCK_STREAM, NULL);
-
-			bind(sListen, (SOCKADDR*)&sock_addr, size);
-
-			listen(sListen, SOMAXCONN);
-
-			SOCKET newinit;
-			int client_size = sizeof(client_addr);
-			std::cout << "\nwaiting for server to connect";
-			newinit = accept(sListen, (SOCKADDR*)&client_addr, &client_size);
-			std::cout << "\nserver connected";
 			char ch_response1[2048];
-			recv(newinit, ch_response1, sizeof(ch_response1), NULL);
-			std::cout << "\nrecieved ch_response";
+			recv(sock, ch_response1, sizeof(ch_response1), NULL);
 
 			std::string str_response1 = ch_response1;
+
 			std::vector<std::string> str_vec_response1 = from_ch(str_response1);
 
 			std::string nickname_from = str_vec_response1[0];
@@ -141,11 +133,19 @@ namespace client {
 			std::string DH_str_from = to_set(public_keys);
 			DH_str_from = to_fixed_length(DH_str_from, 512);
 			const char* DH_set_from = DH_str_from.c_str();
-			send(newinit, DH_set_from, 512, NULL);
+			send(sock, DH_set_from, 512, NULL);
 			std::string AES_key = getAESKey(p_arr, private_keys, DH_str_to);
 			char ch_msg[4096];
-			recv(newinit, ch_msg, sizeof(ch_msg), NULL);
-			std::string msg{ ch_msg };
+			for (uint8_t i = 0; i < 20; i++) {
+				recv(sock, ch_msg, sizeof(ch_msg), NULL);
+				std::vector<std::string> tmp = from_ch(ch_msg);
+				if (tmp.size() == 2) {
+					break;
+				}
+				std::this_thread::sleep_for(std::chrono::milliseconds(2));
+			}
+			std::string str_msg = ch_msg;
+			std::string msg = from_ch(str_msg)[0];
 			std::string decrypted_msg = decrypt(AES_key, msg);
 
 			std::cout << '\n' << nickname_from << ": " << decrypted_msg;
@@ -155,13 +155,14 @@ namespace client {
 	SOCKET connectServ(int port) {
 		SOCKADDR_IN sock_addr;
 		InetPton(AF_INET, toPCW(ip), &sock_addr.sin_addr.s_addr);
-		sock_addr.sin_port = htons(port);
+		sock_addr.sin_port = port;
 		sock_addr.sin_family = AF_INET;
 
 		SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
 		int size{ sizeof(sock_addr) };
 		connect(sock, (SOCKADDR*)&sock_addr, size);
+		std::cout << "\nsend thread connected to server";
 		return sock;
 	}
 
@@ -230,21 +231,11 @@ namespace client {
 			std::cout << "error: " << str_vec_response[1] << '\n';
 		}
 		else {
-			std::vector<const char*> response;
-			for (uint8_t i = 0; i < str_response.size(); i++) {
-				std::string str_tmp = str_vec_response[i];
-				const char* ch_tmp = str_tmp.c_str();
-				response.push_back(ch_tmp);
-			}
-
-
-			std::array<unsigned short, 64> DH_from = from_set(response[1]);
+			std::array<unsigned short, 64> DH_from = from_set(str_vec_response[1]);
 			std::string AES_key = getAESKey(p_arr, private_keys, DH_from);
-			std::string encrypted_msg = to_fixed_length(encrypt(AES_key, msg), 4096);
+			std::string encrypted_msg = to_fixed_length(encrypt(AES_key, msg) + ';', 4096);
 			const char* ch_encrypted_msg = encrypted_msg.c_str();
 			send(sock, ch_encrypted_msg, 4096, NULL);
-			std::cout << "send_message wsaerror: " << WSAGetLastError() << '\n';
-			std::cout << "message sent\n";
 		}
 		return error;
 	}

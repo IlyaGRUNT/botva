@@ -37,6 +37,9 @@ int main()
 	std::array<int, 2> ports = init(nickname);
 	
 	SOCKET sock = connectServ(ports[0]);
+	std::thread listenThread(listenF, ports[1]);
+
+	std::this_thread::sleep_for(std::chrono::seconds(1)); //condition variable from listenF
 
 	char dest[256];
 	std::cout << "\nDestination: ";
@@ -45,7 +48,6 @@ int main()
 	const char* sd = "/shut_down";
 	const char* chDest = "/ch_dest";
 
-	std::thread listenThread(listenF, ports[1]);
 	while (true) {
 		char* msg{};
 		std::string str_msg;
