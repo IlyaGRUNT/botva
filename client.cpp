@@ -22,6 +22,7 @@
 char delim{ ';' };
 char set_delim{ '#' };
 char to_fixed_symbol{ '@' };
+char ws_replace{ '_' };
 
 std::mutex mu;
 
@@ -31,6 +32,17 @@ using namespace DH;
 using namespace AES;
 
 namespace client {
+
+	std::string replace_ws_to(std::string s) {
+		std::replace(s.begin(), s.end(), ' ', ws_replace);
+		return s;
+	}
+
+	std::string replace_ws_from(std::string s) {
+		std::replace(s.begin(), s.end(), ws_replace, ' ');
+		return s;
+	}
+
 	std::string to_fixed_length(std::string str, unsigned short len) {
 		for (unsigned short i = str.length(); i < len; i++)
 			str += to_fixed_symbol;
@@ -71,8 +83,7 @@ namespace client {
 		return result;
 	}
 
-	wchar_t* toPCW(const std::string s)
-	{
+	wchar_t* toPCW(const std::string s) {
 		const char* charArray = &s[0];
 		wchar_t* wString = new wchar_t[4096];
 		MultiByteToWideChar(CP_ACP, 0, charArray, -1, wString, 4096);
@@ -110,12 +121,19 @@ namespace client {
 
 		int size = sizeof(sock_addr);
 
-		SOCKET sock = socket(AF_INET, SOCK_STREAM, NULL);
+		SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		connect(sock, (SOCKADDR*)&sock_addr, size);
 		std::cout << "\nrecv thread connected server";
+		int i = 0;
 		while (true) {
 			char ch_response1[2048];
-			recv(sock, ch_response1, sizeof(ch_response1), NULL);
+			memset(ch_response1, 0, 2048);
+			int is_recvd1 = recv(sock, ch_response1, sizeof(ch_response1), NULL);
+			//std::cout << "\nfirst is_recvd1: " << is_recvd1;
+			while (is_recvd1 == 1) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+				is_recvd1 = recv(sock, ch_response1, sizeof(ch_response1), NULL);
+			}
 
 			std::string str_response1 = ch_response1;
 
@@ -136,19 +154,24 @@ namespace client {
 			send(sock, DH_set_from, 512, NULL);
 			std::string AES_key = getAESKey(p_arr, private_keys, DH_str_to);
 			char ch_msg[4096];
-			for (uint8_t i = 0; i < 20; i++) {
-				recv(sock, ch_msg, sizeof(ch_msg), NULL);
-				std::vector<std::string> tmp = from_ch(ch_msg);
-				if (tmp.size() == 2) {
-					break;
-				}
-				std::this_thread::sleep_for(std::chrono::milliseconds(2));
+			memset(ch_msg, 0, 4096);
+			int is_recvd2 = recv(sock, ch_msg, sizeof(ch_msg), NULL);
+			//std::cout << "\nfirst is_recvd2: " << is_recvd2;
+			while (is_recvd2 == 1) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+				is_recvd2 = recv(sock, ch_msg, sizeof(ch_msg), NULL);
 			}
+			std::cout << "\nfinal is_recvd2: " << is_recvd2;
 			std::string str_msg = ch_msg;
 			std::string msg = from_ch(str_msg)[0];
-			std::string decrypted_msg = decrypt(AES_key, msg);
+			std::cout << "\nencrypted msg: " << msg;
+			std::string raw_decrypted_msg = decrypt(AES_key, msg);
+			std::cout << "\nmsg: " << raw_decrypted_msg;
 
-			std::cout << '\n' << nickname_from << ": " << decrypted_msg;
+			std::string decrypted_msg = replace_ws_from(raw_decrypted_msg);
+
+			std::cout << '\n' << nickname_from << ": " << decrypted_msg << '\n';
+			i++;
 		}
 	}
 
@@ -187,7 +210,6 @@ namespace client {
 
 		char ch_ports[16];
 		recvfrom(sock, ch_ports, 16, NULL, &tmp, &size);
-		std::cout << "ch_port from recvfrom: " << ch_ports << '\n';
 		std::string str_ports = ch_ports;
 		std::vector<std::string> ports = from_ch(str_ports);
 		
@@ -204,7 +226,8 @@ namespace client {
 		closesocket(sock);
 	}
 
-	bool sendMessage(SOCKET sock, const char* nickname, const char* dest, const char* msg) {
+	bool sendMessage(SOCKET sock, const char* nickname, const char* dest, const char* raw_msg) {
+		//std::cout << "\nbeginning of sendMessage: " << WSAGetLastError();
 		bool error = false;
 		std::array<unsigned short, 64>p_arr = getPArr();
 		std::string p_str = to_set(p_arr);
@@ -216,12 +239,12 @@ namespace client {
 		std::string str_mode = "message";
 		const char* mode = str_mode.c_str();
 		std::vector<const char*> vec_request = { mode, dest, p_set, DH_set_to };
-		std::string str_request = to_ch(vec_request, 8192);
+		std::string str_request = to_ch(vec_request, 4094);
 		const char* request = str_request.c_str();
-		send(sock, request, 8192, NULL);
+		int tmp = send(sock, request, 8192, NULL);
+		//std::cout << "\nrequest sent: " << tmp << " WSAError: " << WSAGetLastError();
 		char ch_response[8192];
 		recv(sock, ch_response, sizeof(ch_response), NULL);
-		std::cout << "recieved response";
 		std::string str_response = ch_response;
 
 		std::vector<std::string> str_vec_response = from_ch(str_response);
@@ -233,9 +256,17 @@ namespace client {
 		else {
 			std::array<unsigned short, 64> DH_from = from_set(str_vec_response[1]);
 			std::string AES_key = getAESKey(p_arr, private_keys, DH_from);
+			std::string str_raw_msg = raw_msg;
+			std::cout << "\nmsg before replace" << str_raw_msg;
+			std::replace(str_raw_msg.begin(), str_raw_msg.end(), ' ', ws_replace);
+			const char* msg = str_raw_msg.c_str();
+			std::cout << "\nmsg after replace: " << msg;
 			std::string encrypted_msg = to_fixed_length(encrypt(AES_key, msg) + ';', 4096);
+			std::cout << "\nencrypted msg: " << encrypted_msg;
+			unsigned short problem_char = static_cast<unsigned short>(encrypted_msg[6]);
+			std::cout << "\nproblem is: " << problem_char;
 			const char* ch_encrypted_msg = encrypted_msg.c_str();
-			send(sock, ch_encrypted_msg, 4096, NULL);
+			send(sock, ch_encrypted_msg, 2000, NULL);
 		}
 		return error;
 	}

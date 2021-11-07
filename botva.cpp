@@ -47,13 +47,12 @@ int main()
 
 	const char* sd = "/shut_down";
 	const char* chDest = "/ch_dest";
+	std::cout << "Ready for chat\n";
 
 	while (true) {
-		char* msg{};
 		std::string str_msg;
-		std::cout << "Enter your message: ";
-		std::cin >> str_msg;
-		msg = &str_msg[0];
+		std::getline(std::cin >> std::ws, str_msg);
+		const char* msg = str_msg.c_str();
 		if (msg == sd) {
 			shut_down(sock);
 			break;
