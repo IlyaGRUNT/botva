@@ -8,8 +8,7 @@ using namespace AES;
 using namespace DH;
 using namespace client;
 
-int main()
-{
+int main() {
     //srand(time(0));
     //const array<unsigned short, 64> pArr{ getPArr() };
     //const array<unsigned long long, 64> privateKeyArr1{ getPrivateKeyArr() };
@@ -68,6 +67,7 @@ int main()
 		}
 	}
 	listenThread.detach();
+
 	system("pause");
 	return 0;
 }

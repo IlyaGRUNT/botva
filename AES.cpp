@@ -10,6 +10,8 @@
 using namespace std;
 
 namespace AES {
+    const std::string ws = " \n\r\t\f\v";
+
     const array<array<string, 16>, 16> SBox{
         array<string, 16> {"63", "7c", "77", "7b", "f2", "6b", "6f", "c5", "30", "01", "67", "2b", "fe", "d7", "ab", "76"},
         array<string, 16> {"ca", "82", "c9", "7d", "fa", "59", "47", "f0", "ad", "d4", "a2", "af", "9c", "a4", "72", "c0"},
@@ -119,6 +121,30 @@ namespace AES {
         return bitset<4>{0b0000};
     }
 
+    std::string delete_ws(std::string s) {
+        size_t end = s.find_last_not_of(ws);
+        return s.substr(0, end + 1);
+    }
+
+    std::string char_to_hex(unsigned char ch) {
+        unsigned short ch_num = static_cast<unsigned short>(ch);
+        std::stringstream ss;
+        ss << std::hex << ch_num;
+        std::string hex = ss.str();
+        if (hex.length() == 1)
+            hex = '0' + hex;
+        return hex;
+    }
+
+    unsigned char hex_to_char(std::string s) {
+        unsigned short us_res;
+        std::stringstream ss;
+        ss << std::hex << s;
+        ss >> us_res;
+        char res = static_cast<unsigned char>(us_res);
+        return res;
+    }
+
     bitset<8> concat(bitset<4> a, bitset<4> b) {
         const string strA{ a.to_string() };
         const string strB{ b.to_string() };
@@ -210,26 +236,43 @@ namespace AES {
         }
     };
 
-    uint8_t getNumOfBlocks(string text) {
+    uint8_t getNumOfBlocks(string text, bool is_decrypt) {
         const double textLen = static_cast<double>(text.length());
-        const unsigned int numberOfBlocks{ static_cast<unsigned int>(ceil(textLen / 16.0)) };
+        unsigned int numberOfBlocks;
+        if (is_decrypt)
+            numberOfBlocks = static_cast<unsigned int>(ceil(textLen / 32.0));
+        else
+            numberOfBlocks = static_cast<unsigned int>(ceil(textLen / 16.0));
         return numberOfBlocks;
     }
 
-    string getStrState(string text, unsigned int index) {
-        string block = text.substr(static_cast<_int64>(index) * 16, 16);
-        unsigned _int64 len{ block.length() };
-        if (block.length() < 16)
-            for (uint8_t i = 0; i < (16 - len); i++)
-                block.push_back(' ');
-        return block;
+    void getStrState(string text, unsigned int index, char *ch_state, bool is_decrypt) {
+        if (is_decrypt) {
+            string block = text.substr(index * 32, 32);
+            for (uint8_t i = 0; i < 16; i++) {
+                std::string hex_char = std::string() + block[i * 2] + block[i * 2 + 1];
+                ch_state[i] = hex_to_char(hex_char);
+            }
+        }
+        else {
+            string block = text.substr(index * 16, 16);
+            uint8_t len =  block.length();
+            if (len < 16)
+                for (uint8_t i = len; i < 16; i++)
+                    block.push_back(' ');
+            for (uint8_t i = 0; i < 16; i++) {
+                ch_state[i] = block[i];
+            }
+        }
+
     }
 
-    void getState(string text, unsigned int index) {
-        string strState = getStrState(text, index);
-        for (_int64 row = 0; row < 4; row++)
-            for (_int64 column = 0; column < 4; column++) {
-                state[row][column] = bitset<8>(strState[row * 4 + column]);
+    void getState(string text, unsigned int index, bool is_decrypt) {
+        char ch_state[17];
+        getStrState(text, index, ch_state, is_decrypt);
+        for (uint8_t row = 0; row < 4; row++)
+            for (uint8_t column = 0; column < 4; column++) {
+                state[row][column] = bitset<8>(ch_state[row * 4 + column]);
             }
     }
 
@@ -331,23 +374,27 @@ namespace AES {
             state[row] = xorBytes(state[row], keySchedule[round][row]);
     }
 
-    string stateToStr() {
+    string stateToStr(bool is_decrypt) {
         unsigned char stateChar{};
         string encryptedString{};
         for (uint8_t row = 0; row < 4; row++)
             for (uint8_t column = 0; column < 4; column++) {
                 stateChar = static_cast<unsigned char>(state[row][column].to_ullong());
-                encryptedString.push_back(stateChar);
+                if (is_decrypt)
+                    encryptedString.push_back(stateChar);
+                else
+                    encryptedString += char_to_hex(stateChar);
             }
         return encryptedString;
     }
 
     string encrypt(string key, string text) {
+        bool is_decrypt = false;
         string encryptedString{};
         expandKey(key);
-        uint8_t numOfBlocks{ getNumOfBlocks(text) };
+        uint8_t numOfBlocks{ getNumOfBlocks(text, is_decrypt) };
         for (uint8_t block = 0; block < numOfBlocks; block++) {
-            getState(text, block);
+            getState(text, block, is_decrypt);
             for (uint8_t round = 0; round < 14; round++) {
                 subBytes();
                 shiftRows();
@@ -357,29 +404,30 @@ namespace AES {
             subBytes();
             shiftRows();
             addRoundKey(14);
-            encryptedString += stateToStr();
+            encryptedString += stateToStr(is_decrypt);
         }
         return encryptedString;
     }
 
     string decrypt(string key, string text) {
+        bool is_decrypt = true;
         string decryptedString{};
         expandKey(key);
-        uint8_t numOfBlocks{ getNumOfBlocks(text) };
+        uint8_t numOfBlocks{ getNumOfBlocks(text, is_decrypt) };
         for (uint8_t block = numOfBlocks; block > 0; block--) {
-            getState(text, block - 1);
+            getState(text, block - 1, is_decrypt);
             addRoundKey(14);
             invShiftRows();
             invSubBytes();
        
-        for (uint8_t round = 14; round > 0; round--) {
+            for (uint8_t round = 14; round > 0; round--) {
                 addRoundKey(round - 1);
                 invMixColumns();
                 invShiftRows();
                 invSubBytes();
             }
-        decryptedString = stateToStr() + decryptedString;
+            decryptedString = stateToStr(is_decrypt) + decryptedString;
         }
-        return decryptedString;
+        return delete_ws(decryptedString);
     }
 };

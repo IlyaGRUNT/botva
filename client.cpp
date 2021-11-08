@@ -33,6 +33,25 @@ using namespace AES;
 
 namespace client {
 
+	std::string char_to_hex(char ch) {
+		unsigned short ch_num = static_cast<unsigned short>(ch);
+		std::stringstream ss;
+		ss << std::hex << ch_num;
+		std::string hex = ss.str();
+		if (hex.length() == 1)
+			hex = '0' + hex;
+		return hex;
+	}
+
+	char hex_to_char(std::string s) {
+		unsigned short us_res;
+		std::stringstream ss;
+		ss << std::hex << s;
+		ss >> us_res;
+		char res = static_cast<char>(us_res);
+		return res;
+	}
+
 	std::string replace_ws_to(std::string s) {
 		std::replace(s.begin(), s.end(), ' ', ws_replace);
 		return s;
