@@ -32,36 +32,6 @@ using namespace DH;
 using namespace AES;
 
 namespace client {
-
-	std::string char_to_hex(char ch) {
-		unsigned short ch_num = static_cast<unsigned short>(ch);
-		std::stringstream ss;
-		ss << std::hex << ch_num;
-		std::string hex = ss.str();
-		if (hex.length() == 1)
-			hex = '0' + hex;
-		return hex;
-	}
-
-	char hex_to_char(std::string s) {
-		unsigned short us_res;
-		std::stringstream ss;
-		ss << std::hex << s;
-		ss >> us_res;
-		char res = static_cast<char>(us_res);
-		return res;
-	}
-
-	std::string replace_ws_to(std::string s) {
-		std::replace(s.begin(), s.end(), ' ', ws_replace);
-		return s;
-	}
-
-	std::string replace_ws_from(std::string s) {
-		std::replace(s.begin(), s.end(), ws_replace, ' ');
-		return s;
-	}
-
 	std::string to_fixed_length(std::string str, unsigned short len) {
 		for (unsigned short i = str.length(); i < len; i++)
 			str += to_fixed_symbol;
@@ -180,14 +150,9 @@ namespace client {
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 				is_recvd2 = recv(sock, ch_msg, sizeof(ch_msg), NULL);
 			}
-			std::cout << "\nfinal is_recvd2: " << is_recvd2;
 			std::string str_msg = ch_msg;
 			std::string msg = from_ch(str_msg)[0];
-			std::cout << "\nencrypted msg: " << msg;
-			std::string raw_decrypted_msg = decrypt(AES_key, msg);
-			std::cout << "\nmsg: " << raw_decrypted_msg;
-
-			std::string decrypted_msg = replace_ws_from(raw_decrypted_msg);
+			std::string decrypted_msg = decrypt(AES_key, msg);
 
 			std::cout << '\n' << nickname_from << ": " << decrypted_msg << '\n';
 			i++;
@@ -204,7 +169,7 @@ namespace client {
 
 		int size{ sizeof(sock_addr) };
 		connect(sock, (SOCKADDR*)&sock_addr, size);
-		std::cout << "\nsend thread connected to server";
+		std::cout << "\nConnected to server";
 		return sock;
 	}
 
@@ -276,14 +241,12 @@ namespace client {
 			std::array<unsigned short, 64> DH_from = from_set(str_vec_response[1]);
 			std::string AES_key = getAESKey(p_arr, private_keys, DH_from);
 			std::string str_raw_msg = raw_msg;
-			std::cout << "\nmsg before replace" << str_raw_msg;
+			//std::cout << "\nmsg before replace" << str_raw_msg;
 			std::replace(str_raw_msg.begin(), str_raw_msg.end(), ' ', ws_replace);
 			const char* msg = str_raw_msg.c_str();
-			std::cout << "\nmsg after replace: " << msg;
+			//std::cout << "\nmsg after replace: " << msg;
 			std::string encrypted_msg = to_fixed_length(encrypt(AES_key, msg) + ';', 4096);
-			std::cout << "\nencrypted msg: " << encrypted_msg;
-			unsigned short problem_char = static_cast<unsigned short>(encrypted_msg[6]);
-			std::cout << "\nproblem is: " << problem_char;
+			//std::cout << "\nencrypted msg: " << encrypted_msg;
 			const char* ch_encrypted_msg = encrypted_msg.c_str();
 			send(sock, ch_encrypted_msg, 2000, NULL);
 		}
