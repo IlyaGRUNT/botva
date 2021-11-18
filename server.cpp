@@ -26,7 +26,7 @@ struct user {
 	bool shut_down{};
 };
 
-std::map<std::string, user> users;
+std::map<std::string, user> g_users;
 
 std::string to_fixed_length(std::string str, unsigned short len) {
 	for (unsigned short i = str.length(); i < len; i++)
@@ -80,9 +80,7 @@ void TCPRecvThread(int port, SOCKET sock, std::string nickname) {
 		error = 1;
 	}
 	else {
-		//std::cout << LastError() << '\n';
 		std::cout << '\n' << nickname << " recvThread: client connected to recv thread";
-		//std::cout << str << '\n';
 		char ch_data[8192];
 
 		int WSAError = WSAGetLastError();
@@ -93,7 +91,7 @@ void TCPRecvThread(int port, SOCKET sock, std::string nickname) {
 				if (WSAError != 0)
 					break;
 				memset(ch_data, 0, 8192);
-				std::wcout << '\n' << nickname << " recvThread: waiting for ch_data";
+				std::cout << '\n' << nickname << " recvThread: waiting for ch_data";
 				recv(newConnection, ch_data, sizeof(ch_data), NULL);
 				std::string str_data = ch_data;
 				if (ch_data == "/shutdown") {
@@ -141,7 +139,7 @@ void TCPRecvThread(int port, SOCKET sock, std::string nickname) {
 
 							to_cv->notify_one();
 
-							to_lk.lock(); 
+							to_lk.lock();
 							to_cv->wait(to_lk);
 							to_lk.unlock();
 
