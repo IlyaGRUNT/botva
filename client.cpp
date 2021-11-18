@@ -22,7 +22,6 @@
 char delim{ ';' };
 char set_delim{ '#' };
 char to_fixed_symbol{ '@' };
-char ws_replace{ '_' };
 
 std::mutex mu;
 
@@ -32,50 +31,20 @@ using namespace DH;
 using namespace AES;
 
 namespace client {
-
-	std::string char_to_hex(char ch) {
-		unsigned short ch_num = static_cast<unsigned short>(ch);
-		std::stringstream ss;
-		ss << std::hex << ch_num;
-		std::string hex = ss.str();
-		if (hex.length() == 1)
-			hex = '0' + hex;
-		return hex;
-	}
-
-	char hex_to_char(std::string s) {
-		unsigned short us_res;
-		std::stringstream ss;
-		ss << std::hex << s;
-		ss >> us_res;
-		char res = static_cast<char>(us_res);
-		return res;
-	}
-
-	std::string replace_ws_to(std::string s) {
-		std::replace(s.begin(), s.end(), ' ', ws_replace);
-		return s;
-	}
-
-	std::string replace_ws_from(std::string s) {
-		std::replace(s.begin(), s.end(), ws_replace, ' ');
-		return s;
-	}
-
-	std::string to_fixed_length(std::string str, unsigned short len) {
+	std::string toFixedLength(std::string str, unsigned short len) {
 		for (unsigned short i = str.length(); i < len; i++)
 			str += to_fixed_symbol;
 		return str;
 	}
 
-	std::vector<std::string> from_ch(std::string str) {
+	std::vector<std::string> fromCh(std::string str) {
 		std::string str_delim(1, delim);
 		std::vector<std::string> res;
 		boost::split(res, str, boost::is_any_of(str_delim), boost::token_compress_on);
 		return res;
 	}
 	
-	std::string to_ch(std::vector<const char*> vec, unsigned short len) {
+	std::string toCh(std::vector<const char*> vec, unsigned short len) {
 		std::vector<char*> non_const_vec;
 		for (unsigned short i = 0; i < vec.size(); i++) {
 			const char* tmp = vec[i];
@@ -86,11 +55,11 @@ namespace client {
 		std::stringstream ss;
 		std::copy(non_const_vec.begin(), non_const_vec.end(), std::ostream_iterator<char*>(ss, str_delim.c_str()));
 		std::string str = ss.str();
-		str = to_fixed_length(str, len);
+		str = toFixedLength(str, len);
 		return str;
 	}
 
-	std::array<unsigned short, 64> from_set(std::string s) {
+	std::array<unsigned short, 64> fromSet(std::string s) {
 		std::array<unsigned short, 64> result;
 		std::stringstream s_stream(s);
 		for (uint8_t i = 0; i < 64; i++) {
@@ -109,7 +78,7 @@ namespace client {
 		return wString;
 	}
 
-	std::string to_set(std::array<unsigned short, 64> DH) {
+	std::string toSet(std::array<unsigned short, 64> DH) {
 		std::string str_delim(1, set_delim);
 		std::stringstream ss;
 		std::copy(DH.begin(), DH.end(), std::ostream_iterator<unsigned short>(ss, str_delim.c_str()));
@@ -126,23 +95,23 @@ namespace client {
 	std::string getAESConnectionKeyTo(SOCKET sock, const char* dest) {
 		bool error = false;
 		std::array<unsigned short, 64>p_arr = getPArr();
-		std::string p_str = to_set(p_arr);
+		std::string p_str = toSet(p_arr);
 		const char* p_set = p_str.c_str();
 		std::array<unsigned long long, 64>private_keys = getPrivateKeyArr();
 		std::array<unsigned short, 64>public_keys = getPublicKeyArr(p_arr, private_keys);
-		std::string DH_str_to = to_set(public_keys);
+		std::string DH_str_to = toSet(public_keys);
 		const char* DH_set_to = DH_str_to.c_str();
 		std::string str_mode = "message";
 		const char* mode = str_mode.c_str();
 		std::vector<const char*> vec_request = { mode, dest, p_set, DH_set_to };
-		std::string str_request = to_ch(vec_request, 4094);
+		std::string str_request = toCh(vec_request, 4094);
 		const char* request = str_request.c_str();
 		send(sock, request, 8192, NULL);
 		char ch_response[8192];
 		recv(sock, ch_response, sizeof(ch_response), NULL);
 		std::string str_response = ch_response;
 
-		std::vector<std::string> str_vec_response = from_ch(str_response);
+		std::vector<std::string> str_vec_response = fromCh(str_response);
 
 		if (str_vec_response[0] == "er") {
 			error = true;
@@ -150,7 +119,7 @@ namespace client {
 			return error_msg;
 		}
 		else {
-			std::array<unsigned short, 64> DH_from = from_set(str_vec_response[1]);
+			std::array<unsigned short, 64> DH_from = fromSet(str_vec_response[1]);
 			std::string AES_key = "0;" + getAESKey(p_arr, private_keys, DH_from);
 			return AES_key;
 		}
@@ -167,19 +136,19 @@ namespace client {
 
 		std::string str_response1 = ch_response1;
 
-		std::vector<std::string> str_vec_response1 = from_ch(str_response1);
+		std::vector<std::string> str_vec_response1 = fromCh(str_response1);
 
 		std::string nickname_from = str_vec_response1[0];
 		const char* p_set = str_vec_response1[1].c_str();
 		const char* DH_set_to = str_vec_response1[2].c_str();
 
-		std::array<unsigned short, 64> p_arr = from_set(p_set);
+		std::array<unsigned short, 64> p_arr = fromSet(p_set);
 
-		std::array<unsigned short, 64> DH_str_to = from_set(DH_set_to);
+		std::array<unsigned short, 64> DH_str_to = fromSet(DH_set_to);
 		std::array<unsigned long long, 64> private_keys = getPrivateKeyArr();
 		std::array<unsigned short, 64> public_keys = getPublicKeyArr(p_arr, private_keys);
-		std::string DH_str_from = to_set(public_keys);
-		DH_str_from = to_fixed_length(DH_str_from, 512);
+		std::string DH_str_from = toSet(public_keys);
+		DH_str_from = toFixedLength(DH_str_from, 512);
 		const char* DH_set_from = DH_str_from.c_str();
 		send(sock, DH_set_from, 512, NULL);
 		std::string AES_key = getAESKey(p_arr, private_keys, DH_str_to);
@@ -187,7 +156,7 @@ namespace client {
 		return res;
 	}
 
-	void listenF(int port) {
+	void listenThread(int port) {
 		std::cout << "\nListenF thread started";
 		WSADATA WSAdata;
 		WORD DLLVersion = MAKEWORD(2, 1);
@@ -222,19 +191,37 @@ namespace client {
 			}
 			std::cout << "\nfinal is_recvd2: " << is_recvd2;
 			std::string str_msg = ch_msg;
-			std::string msg = from_ch(str_msg)[0];
-			std::cout << "\nencrypted msg: " << msg;
-			std::string raw_decrypted_msg = decrypt(AES_key, msg);
-			std::cout << "\nmsg: " << raw_decrypted_msg;
-
-			std::string decrypted_msg = replace_ws_from(raw_decrypted_msg);
+			std::string msg = fromCh(str_msg)[0];
+			std::string decrypted_msg = decrypt(AES_key, msg);
 
 			std::cout << '\n' << nickname_from << ": " << decrypted_msg << '\n';
 			i++;
 		}
 	}
 
-	SOCKET connectServ(int port) {
+	std::array<int, 2> getPorts(std::string nickname) {
+		SOCKADDR_IN server_addr;
+		InetPton(AF_INET, toPCW(ip), &server_addr.sin_addr.s_addr);
+		server_addr.sin_port = UDP_port;
+		server_addr.sin_family = AF_INET;
+
+		SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+		nickname = nickname + ';';
+		sendto(sock, nickname.c_str(), nickname.length(), NULL, (SOCKADDR*)&server_addr, sizeof(server_addr));
+
+		char raw_ports[16];
+		int server_addr_size = sizeof(server_addr);
+		recvfrom(sock, raw_ports, sizeof(raw_ports), NULL, (SOCKADDR*)&server_addr, &server_addr_size);
+		
+		std::string str_ports = raw_ports;
+		std::vector<std::string> vec_ports = fromCh(str_ports);
+		std::array<int, 2> arr_ports{std::stoi(vec_ports[0]), std::stoi(vec_ports[1])};
+
+		return arr_ports;
+	}
+
+	SOCKET connectToTCP(int port) {
 		SOCKADDR_IN sock_addr;
 		InetPton(AF_INET, toPCW(ip), &sock_addr.sin_addr.s_addr);
 		sock_addr.sin_port = port;
@@ -257,7 +244,7 @@ namespace client {
 
 	bool sendMessage(SOCKET sock, const char* nickname, const char* dest, const char* msg) {
 		bool error = false;
-		auto AES_vec = from_ch(getAESConnectionKeyTo(sock, dest));
+		auto AES_vec = fromCh(getAESConnectionKeyTo(sock, dest));
 		if (AES_vec[0] == "1") {
 			error = true;
 			std::cout << AES_vec[1];
@@ -265,7 +252,7 @@ namespace client {
 		else {
 			std::string AES_key = AES_vec[1];
 			std::cout << "\nmsg after replace: " << msg;
-			std::string encrypted_msg = to_fixed_length(encrypt(AES_key, msg) + ';', 4096);
+			std::string encrypted_msg = toFixedLength(encrypt(AES_key, msg) + ';', 4096);
 			std::cout << "\nencrypted msg: " << encrypted_msg;
 			unsigned short problem_char = static_cast<unsigned short>(encrypted_msg[6]);
 			std::cout << "\nproblem is: " << problem_char;

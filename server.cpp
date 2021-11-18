@@ -68,25 +68,20 @@ void TCPRecvThread(int port, SOCKET sock, std::string nickname) {
 
 	unsigned short error = 0;
 
-	char enable = 1;
-	//setsockopt(sListen, SOL_SOCKET, SO_DONTLINGER, &enable , sizeof(char));
-	//setsockopt(sListen, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(char));
-
 	listen(sock, SOMAXCONN);
 
 	SOCKADDR client_addr;
 	SOCKET newConnection;
 	int client_size = sizeof(client_addr);
-	std::cout << "\nTCP waiting for connection on port: " << port << ' ' << WSAGetLastError();
 	newConnection = accept(sock, &client_addr, &client_size);
 
 	if (newConnection == 0) {
-		std::cout << '\n' << port << ": failed to connect";
+		std::cout << '\n' << nickname << " recvThread: failed to connect";
 		error = 1;
 	}
 	else {
 		//std::cout << LastError() << '\n';
-		std::cout << '\n' << port << ": client connected to recv thread";
+		std::cout << '\n' << nickname << " recvThread: client connected to recv thread";
 		//std::cout << str << '\n';
 		char ch_data[8192];
 
@@ -98,7 +93,7 @@ void TCPRecvThread(int port, SOCKET sock, std::string nickname) {
 				if (WSAError != 0)
 					break;
 				memset(ch_data, 0, 8192);
-				std::wcout << '\n' << port << ": waiting for ch_data";
+				std::wcout << '\n' << nickname << " recvThread: waiting for ch_data";
 				recv(newConnection, ch_data, sizeof(ch_data), NULL);
 				std::string str_data = ch_data;
 				if (ch_data == "/shutdown") {
@@ -118,7 +113,7 @@ void TCPRecvThread(int port, SOCKET sock, std::string nickname) {
 					std::string mode = data[0];
 
 					if (mode == "message") {
-						std::cout << '\n' << port << ": message";
+						std::cout << '\n' << nickname << " recvThread: message";
 						const char* char_to = data[1].c_str();
 						const char* p_set = data[2].c_str();
 						const char*  DH_set_to = data[3].c_str();
@@ -187,7 +182,7 @@ void TCPRecvThread(int port, SOCKET sock, std::string nickname) {
 		WSAError = WSAGetLastError();
 		if (WSAError != 0)
 			error = 1;
-		std::cout << '\n' << port << ": thread finished with code " << error << " WSAError: " << WSAGetLastError();
+		std::cout << '\n' << nickname << " recvThread: thread finished with code " << error << " WSAError: " << WSAGetLastError();
 
 		users.erase(nickname);
 		shutdown(newConnection, 2);
@@ -203,7 +198,7 @@ void TCPSendThread(int port, SOCKET sock1, std::string nickname) {
 	int size = sizeof(client_addr);
 
 	SOCKET sock = accept(sock1, &client_addr, &size);
-	std::cout << '\n' << port << ": client connected to send thread";
+	std::cout << '\n' << nickname << " sendThread: client connected to send thread";
 
 	std::mutex* mu = users[nickname].mu.get();
 	std::condition_variable* cv = users[nickname].cv.get();
@@ -218,6 +213,8 @@ void TCPSendThread(int port, SOCKET sock1, std::string nickname) {
 
 		cv->wait(lk);
 		lk.unlock();
+
+		std::cout << '\n' << nickname << " sendThread: client connected to send thread";
 
 		if (users[nickname].shut_down) {
 			users.erase(nickname);
@@ -273,7 +270,7 @@ void TCPSendThread(int port, SOCKET sock1, std::string nickname) {
 		
 	}
 	WSAError = WSAGetLastError();
-	std::cout << '\n' << port << ": send thread finished with code " << (WSAError != 0) << " WSAError: " << WSAError;
+	std::cout << '\n' << nickname << " sendThread: send thread finished with code " << (WSAError != 0) << " WSAError: " << WSAError;
 
 }
 
