@@ -92,7 +92,7 @@ namespace client {
 		}
 	}
 
-	std::string getAESConnectionKeyTo(SOCKET sock, const char* dest) {
+	std::string getAESTo(SOCKET sock, const char* dest) {
 		bool error = false;
 		std::array<unsigned short, 64>p_arr = getPArr();
 		std::string p_str = toSet(p_arr);
@@ -125,7 +125,7 @@ namespace client {
 		}
 	}
 
-	std::vector<std::string> getAESConnectionKeyFrom(SOCKET sock) {
+	std::vector<std::string> getAESFrom(SOCKET sock) {
 		char ch_response1[2048];
 		int is_recvd1 = recv(sock, ch_response1, sizeof(ch_response1), NULL);
 		//std::cout << "\nfirst is_recvd1: " << is_recvd1;
@@ -178,7 +178,7 @@ namespace client {
 		std::cout << "\nrecv thread connected server";
 		int i = 0;
 		while (true) {
-			std::vector<std::string> recvd_data = getAESConnectionKeyFrom(sock);
+			std::vector<std::string> recvd_data = getAESFrom(sock);
 			std::string nickname_from = recvd_data[0];
 			std::string AES_key = recvd_data[1];
 			char ch_msg[4096];
@@ -244,7 +244,7 @@ namespace client {
 
 	bool sendMessage(SOCKET sock, const char* nickname, const char* dest, const char* msg) {
 		bool error = false;
-		auto AES_vec = fromCh(getAESConnectionKeyTo(sock, dest));
+		auto AES_vec = fromCh(getAESTo(sock, dest));
 		if (AES_vec[0] == "1") {
 			error = true;
 			std::cout << AES_vec[1];
