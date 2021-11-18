@@ -64,7 +64,7 @@ wchar_t* toPCW(const std::string s) {
 }
 
 void TCPRecvThread(int port, SOCKET sock, std::string nickname) {
-	std::condition_variable* self_cv= users[nickname].cv.get();
+	std::condition_variable* self_cv = g_users[nickname].cv.get();
 
 	unsigned short error = 0;
 
@@ -95,7 +95,7 @@ void TCPRecvThread(int port, SOCKET sock, std::string nickname) {
 				recv(newConnection, ch_data, sizeof(ch_data), NULL);
 				std::string str_data = ch_data;
 				if (ch_data == "/shutdown") {
-					users[nickname].shut_down = true;
+					g_users[nickname].shut_down = true;
 
 					self_cv->notify_one();
 
@@ -118,9 +118,9 @@ void TCPRecvThread(int port, SOCKET sock, std::string nickname) {
 
 						std::string to{ char_to };
 
-						auto to_it = users.find(to);
+						auto to_it = g_users.find(to);
 
-						if (to_it == users.end()) {
+						if (to_it == g_users.end()) {
 							std::wcout << "\noffline";
 							send(newConnection, to_fixed_length("er;User, you are trying to send message to, is offline;", 8192).c_str(), 8192, NULL);
 						}
@@ -182,7 +182,7 @@ void TCPRecvThread(int port, SOCKET sock, std::string nickname) {
 			error = 1;
 		std::cout << '\n' << nickname << " recvThread: thread finished with code " << error << " WSAError: " << WSAGetLastError();
 
-		users.erase(nickname);
+		g_users.erase(nickname);
 		shutdown(newConnection, 2);
 		closesocket(newConnection);
 	}
@@ -198,8 +198,8 @@ void TCPSendThread(int port, SOCKET sock1, std::string nickname) {
 	SOCKET sock = accept(sock1, &client_addr, &size);
 	std::cout << '\n' << nickname << " sendThread: client connected to send thread";
 
-	std::mutex* mu = users[nickname].mu.get();
-	std::condition_variable* cv = users[nickname].cv.get();
+	std::mutex* mu = g_users[nickname].mu.get();
+	std::condition_variable* cv = g_users[nickname].cv.get();
 
 	std::unique_lock<std::mutex> lk(*mu);
 	int WSAError = 0;
@@ -214,8 +214,8 @@ void TCPSendThread(int port, SOCKET sock1, std::string nickname) {
 
 		std::cout << '\n' << nickname << " sendThread: client connected to send thread";
 
-		if (users[nickname].shut_down) {
-			users.erase(nickname);
+		if (g_users[nickname].shut_down) {
+			g_users.erase(nickname);
 			closesocket(sock);
 			closesocket(sock1);
 			break;
@@ -223,7 +223,7 @@ void TCPSendThread(int port, SOCKET sock1, std::string nickname) {
 		}
 		
 		else {
-			std::string str_data = to_fixed_length(users[nickname].str_data.c_str(), 2048);
+			std::string str_data = to_fixed_length(g_users[nickname].str_data.c_str(), 2048);
 
 			send(sock, str_data.c_str(), str_data.length() + 1, NULL);
 
@@ -239,7 +239,7 @@ void TCPSendThread(int port, SOCKET sock1, std::string nickname) {
 				break;
 
 			std::string str_DH_set = DH_set;
-			users[nickname].str_data = DH_set;
+			g_users[nickname].str_data = DH_set;
 
 			cv->notify_one();
 
@@ -247,20 +247,20 @@ void TCPSendThread(int port, SOCKET sock1, std::string nickname) {
 			cv->wait(lk);
 			lk.unlock();
 
-			if (users[nickname].shut_down) {
-				users.erase(nickname);
+			if (g_users[nickname].shut_down) {
+				g_users.erase(nickname);
 				closesocket(sock);
 				closesocket(sock1);
 				break;
 			}
 			else {
-				std::string msg = users[nickname].str_data;
+				std::string msg = g_users[nickname].str_data;
 				send(sock, msg.c_str(), msg.length() + 1, NULL);
 				WSAError = WSAGetLastError();
 				if (WSAError != 0)
 					break;
 
-				users[nickname].str_data = "";
+				g_users[nickname].str_data = "";
 			}
 			cv->notify_one();
 			lk.lock();
@@ -304,7 +304,7 @@ int main(int argc, char* argv[]) {
 		const char* ch_nickname = nickname.c_str();
 
 		std::string str = "";
-		users[nickname] = { std::make_unique<std::mutex>(), std::make_unique<std::condition_variable>(), str, false};
+		g_users[nickname] = { std::make_unique<std::mutex>(), std::make_unique<std::condition_variable>(), str, false};
 
 		SOCKADDR_IN recv_TCP_addr;
 		recv_TCP_addr.sin_addr.s_addr = INADDR_ANY;
