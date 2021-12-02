@@ -20,6 +20,6 @@ namespace client {
 	void listenThread(int port);
 	std::array<int, 2> getPorts(std::string nickname);
 	SOCKET connectToTCP(int port);
-	void shutDown(SOCKET sock);
+	void shut_down(SOCKET sock);
 	bool sendMessage(SOCKET sock, const char* nickname, const char* dest, const char* msg);
 }

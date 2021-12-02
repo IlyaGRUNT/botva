@@ -189,7 +189,6 @@ namespace client {
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 				is_recvd2 = recv(sock, ch_msg, sizeof(ch_msg), NULL);
 			}
-			std::cout << "\nfinal is_recvd2: " << is_recvd2;
 			std::string str_msg = ch_msg;
 			std::string msg = fromCh(str_msg)[0];
 			std::string decrypted_msg = decrypt(AES_key, msg);
@@ -202,17 +201,26 @@ namespace client {
 	std::array<int, 2> getPorts(std::string nickname) {
 		SOCKADDR_IN server_addr;
 		InetPton(AF_INET, toPCW(ip), &server_addr.sin_addr.s_addr);
-		server_addr.sin_port = UDP_port;
+		server_addr.sin_port = htons(UDP_port);
 		server_addr.sin_family = AF_INET;
 
 		SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
 		nickname = nickname + ';';
-		sendto(sock, nickname.c_str(), nickname.length(), NULL, (SOCKADDR*)&server_addr, sizeof(server_addr));
+		auto send_error = sendto(sock, nickname.c_str(), nickname.length(), NULL, (SOCKADDR*)&server_addr, sizeof(server_addr));
+		if (send_error == -1) {
+			std::cout << "\nerror from sendto: " << WSAGetLastError();
+			exit(1);
+		}
+
 
 		char raw_ports[16];
 		int server_addr_size = sizeof(server_addr);
-		recvfrom(sock, raw_ports, sizeof(raw_ports), NULL, (SOCKADDR*)&server_addr, &server_addr_size);
+		auto recv_error = recvfrom(sock, raw_ports, sizeof(raw_ports), NULL, (SOCKADDR*)&server_addr, &server_addr_size);
+		if (recv_error == -1) {
+			std::cout << "\nerror from recvfrom: " << WSAGetLastError();
+			exit(1);
+		}
 		
 		std::string str_ports = raw_ports;
 		std::vector<std::string> vec_ports = fromCh(str_ports);
@@ -253,9 +261,7 @@ namespace client {
 			std::string AES_key = AES_vec[1];
 			std::cout << "\nmsg after replace: " << msg;
 			std::string encrypted_msg = toFixedLength(encrypt(AES_key, msg) + ';', 4096);
-			std::cout << "\nencrypted msg: " << encrypted_msg;
 			unsigned short problem_char = static_cast<unsigned short>(encrypted_msg[6]);
-			std::cout << "\nproblem is: " << problem_char;
 			const char* ch_encrypted_msg = encrypted_msg.c_str();
 			send(sock, ch_encrypted_msg, 2000, NULL);
 		}
