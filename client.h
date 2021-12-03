@@ -17,9 +17,9 @@ namespace client {
 	void deleteFromArray(char* arr, unsigned short pos);
 	std::vector<std::string> getAESFrom(SOCKET sock);
 	std::string getAESTo(SOCKET sock, const char* dest);
-	void listenThread(int port);
-	std::array<int, 2> getPorts(std::string nickname);
-	SOCKET connectToTCP(int port);
-	void shut_down(SOCKET sock);
+	void listenThread(int port, std::string ip);
+	std::array<int, 2> getPorts(std::string nickname, std::string ip, int UDP_port);
+	SOCKET connectToTCP(int port, std::string ip);
+	void shutDown(SOCKET sock);
 	bool sendMessage(SOCKET sock, const char* nickname, const char* dest, const char* msg);
 }

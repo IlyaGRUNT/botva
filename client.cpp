@@ -11,19 +11,16 @@
 #include <vector>
 #include <mutex>
 #include <condition_variable>
+#include <filesystem>
+#include <fstream>
 #include "DH.h"
 #include "AES.h"
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 
-#define ip       "25.33.129.217"
-#define UDP_port 781
-
 char delim{ ';' };
 char set_delim{ '#' };
 char to_fixed_symbol{ '@' };
-
-std::mutex mu;
 
 using namespace std::this_thread;
 using namespace std::chrono;
@@ -156,7 +153,7 @@ namespace client {
 		return res;
 	}
 
-	void listenThread(int port) {
+	void listenThread(int port, std::string ip) {
 		std::cout << "\nListenF thread started";
 		WSADATA WSAdata;
 		WORD DLLVersion = MAKEWORD(2, 1);
@@ -198,7 +195,7 @@ namespace client {
 		}
 	}
 
-	std::array<int, 2> getPorts(std::string nickname) {
+	std::array<int, 2> getPorts(std::string nickname, std::string ip, int UDP_port) {
 		SOCKADDR_IN server_addr;
 		InetPton(AF_INET, toPCW(ip), &server_addr.sin_addr.s_addr);
 		server_addr.sin_port = htons(UDP_port);
@@ -229,7 +226,7 @@ namespace client {
 		return arr_ports;
 	}
 
-	SOCKET connectToTCP(int port) {
+	SOCKET connectToTCP(int port, std::string ip) {
 		SOCKADDR_IN sock_addr;
 		InetPton(AF_INET, toPCW(ip), &sock_addr.sin_addr.s_addr);
 		sock_addr.sin_port = port;
@@ -243,7 +240,7 @@ namespace client {
 		return sock;
 	}
 
-	void shut_down(SOCKET sock) {
+	void shutDown(SOCKET sock) {
 		const char* sd_cmd = "/shut down";
 		send(sock, sd_cmd, sizeof(sd_cmd), NULL);
 		shutdown(sock, 2);
@@ -259,7 +256,6 @@ namespace client {
 		}
 		else {
 			std::string AES_key = AES_vec[1];
-			std::cout << "\nmsg after replace: " << msg;
 			std::string encrypted_msg = toFixedLength(encrypt(AES_key, msg) + ';', 4096);
 			unsigned short problem_char = static_cast<unsigned short>(encrypted_msg[6]);
 			const char* ch_encrypted_msg = encrypted_msg.c_str();
